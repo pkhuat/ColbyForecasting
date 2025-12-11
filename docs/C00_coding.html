@@ -345,7 +345,7 @@ Note
         x = sf::st_as_sf(x, coords = c("lon", "lat"), crs = 4326)
     x
 }
-&lt;bytecode: 0x559e24aa4768&gt;</code></pre>
+&lt;bytecode: 0x5576ac65fd30&gt;</code></pre>
 </div>
 </div>
 <p>If that still doesn’t work, we highly recommend trying <a href="https://rseek.org/">Rseek.org</a> which is an R-language specific search engine.</p>
@@ -443,6 +443,7 @@ Geodetic CRS:  WGS 84
 <pre><code>stars object with 3 dimensions and 9 attributes
 attribute(s):
                 Min.      1st Qu.        Median          Mean      3rd Qu.
+depth   5.000000e+00 60.258880615 145.012619019 923.313763739 1.704049e+03
 MLD     1.011275e+00  5.583339810  15.967359543  18.910421492 2.809953e+01
 Sbtm    2.324167e+01 32.136343956  34.232215881  33.507147254 3.491243e+01
 SSS     1.644333e+01 30.735633373  31.104771614  31.492407921 3.203519e+01
@@ -451,8 +452,8 @@ Tbtm   -2.676387e-01  3.595118523   6.110801697   6.122372065 7.521761e+00
 U      -2.121380e-01 -0.010892980  -0.002634738  -0.010139401 7.229637e-04
 V      -1.883337e-01 -0.010722862  -0.002858645  -0.008474233 9.565173e-04
 Xbtm    3.275602e-06  0.001458065   0.003088348   0.008360344 7.256525e-03
-depth   5.000000e+00 60.258880615 145.012619019 923.313763739 1.704049e+03
                Max.  NA's
+depth  4.964409e+03 59796
 MLD    1.066982e+02 59796
 Sbtm   3.515742e+01 59796
 SSS    3.559161e+01 59796
@@ -461,7 +462,6 @@ Tbtm   2.460999e+01 59796
 U      7.469980e-02 59796
 V      5.264002e-02 59796
 Xbtm   1.899681e-01 59796
-depth  4.964409e+03 59796
 dimension(s):
       from  to offset    delta refsys point      values x/y
 x        1 121 -74.93  0.08226 WGS 84 FALSE        NULL [x]

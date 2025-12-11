@@ -6,9 +6,9 @@ format: html
 > All models are wrong, but some are useful.
 >   ~ [George Box](https://en.wikipedia.org/wiki/George_E._P._Box)
 
-Modeling starts with a collection of observations (presence and background for us!) and ends up with a collection of coeefficients that can be used with one or more formulas to make a predicition for the past, the present or the future.  We are using modeling specifically to make habitat suitability maps for select species under two climate scenarios (RCP45 and RCP85) at two different times (2055 and 2075) in the future.
+Modeling starts with a collection of observations (presence and background for us!) and ends up with a collection of coefficients that can be used with one or more formulas to make a prediction about the past ("hindcast"), the present ("nowcast") or the future ("forecast").  We are using modeling specifically to make habitat suitability maps for select species under two climate scenarios (RCP45 and RCP85) at two different times (2055 and 2075) in the future.
 
-We can choose from a number of different models: [random forest "rf"](https://en.wikipedia.org/wiki/Random_forest), [maximum entropy "maxent" or "maxnet"](https://en.wikipedia.org/wiki/Principle_of_maximum_entropy), [boosted regression trees "brt"](boosted regression trees), [general linear models "glm"](https://en.wikipedia.org/wiki/General_linear_model), etc.  The point of each is to make a mathematical representation of natural occurrences. It is important to consider what those occurences might be - *categorical* like labels? *likelihoods* like probabilities? *continuous* like measurements?  Here are examples of each...
+We can choose from a number of different models: [random forest "rf"](https://en.wikipedia.org/wiki/Random_forest), [maximum entropy "maxent" or "maxnet"](https://en.wikipedia.org/wiki/Principle_of_maximum_entropy), [boosted regression trees "brt"](boosted regression trees), [general linear models "glm"](https://en.wikipedia.org/wiki/General_linear_model), etc.  The point of each is to make a mathematical representation of natural occurrences. It is important to consider what those occurrences might be - *categorical* like labels? *likelihoods* like probabilities? *continuous* like measurements?  Here are examples of each...
 
 + **Categorical**
   - two class labels: "present/absence", "red/green", "shell/no shell", "alive/dead"
@@ -16,16 +16,7 @@ We can choose from a number of different models: [random forest "rf"](https://en
   
 + **Likelihood and Probability**
   - probability: "50% chance of rain", "80% chance of a fatal fall"
-  - relativity: "low likelihood of encounter", "some likelihood of encounter"
-  
-+ **Continuous**
-  - abundance: "48.2 mice per km^2", "10,500 copepods per m^3"
-  - rate: "50 knot winds", "28.2 Svedrups"
-  - measure: "3.2 cm of rain", "12.1 grams of carbon"
-  
-We are modeling with known observations (presences) and a sampling of the background, so we are trying to model a likelihood that a species will be encountered (and reported) relative to the environmental conditions. We are looking for a model that can produce relative likelihood of an encounter that results in a report.
-
-We'll be using a random forest model (rf). We were inspired to follow this route by using this [tidy models tutorial](https://oj713.github.io/tidymodels/index.html) prepared by our colleague [Omi Johnson](https://omi-johnson.netlify.app/).
+  - relativity: "low likelihood of encounter", "some likelihood of encounter"2199olkm, spired to follow this route by using this [tidy models tutorial](https://oj713.github.io/tidymodels/index.html) prepared by our colleague [Omi Johnson](https://github.com/oj713?tab=repositories).
 
 # Setup 
 
@@ -37,13 +28,12 @@ source("setup.R")
 
 # Load data - choose a month and sampling approach
 
-Let's load what we need to build a model for August using the greedy sampling technique. We'll also need the model configuration (which is "g_Aug"). And we'll need the covariate data.  Notice that we select the covariates that are included in our configuration.
+Let's load what we need to build a model for August the model configuration. And we'll need the covariate data.  Notice that we select the covariates that are included in our configuration.
 
 ```{r load_data}
 model_input = read_model_input(scientificname = "Mola mola", 
-                               approach = "greedy", 
                                mon = "Aug")
-cfg = read_configuration(version = "g_Aug")
+cfg = read_configuration(version = "Aug", path = data_path("models"))
 db = brickman_database()
 covars = read_brickman(db |> filter(scenario == "PRESENT", interval == "mon"))|>
   select(all_of(cfg$keep_vars))
@@ -318,7 +308,7 @@ autoplot(test_confmat, type = "heatmap")
 plot_roc(test_pred, class, .pred_presence)
 ```
 
-This ROC is more typical of what we see in regular practice. 
+This ROC is more typical of what we see in regular practice (although this looks low to a trained eye.)
 
 ### Accuracy
 
@@ -338,7 +328,7 @@ We can (and should!) save recipes and models to disk for later recall.  We need 
 Now we can save the workflow container.
 
 ```{r save_model}
-write_workflow(fitted_wflow, version = cfg$version)
+write_workflow(fitted_wflow, version = cfg$version, type = get_model_type(fitted_wflow))
 ```
 
 You can read it back later with `read_workflow()`.
@@ -349,5 +339,5 @@ We have built a random forest model using tools from the [tidymodels universe](h
 
 # Coding Assignment
 
-Use the [iterations tutorial](https://bigelowlab.github.io/handytandy/iterations.html) to build a workflow for each month using one or both of your background selection methods.  Save each workflow in the `models` directory.  If you chose to do both background selection methods then you should end up with 24 workflows (12 months x 2 background sampling methods).
+Use the [iterations tutorial](https://bigelowlab.github.io/handytandy/iterations.html) to build a workflow for each month using one or both of your background selection methods.  Save each workflow in the `models` directory.  You should end up with up to 12 workflows, but we know that observations can be highly seasonal so you may find you can't make models for some months.
 

@@ -35,9 +35,11 @@ partial_dependence_plot = function(x,
     x = x$fit
   }
   # compute the partial effects
+  ix = which(colnames(data) == outcome)
   pd = effectplots::partial_dependence(x, 
                      v = v, 
-                     data = data) 
+                     data = data,
+                     which_pred = ix) 
   # plot
   p = plot(pd, share_y = share_y, ...)
   # save if requested

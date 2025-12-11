@@ -9,6 +9,9 @@ Traditional ecological surveys are systematic, for a given species survey data s
 
 When we model species distributions we are trying to define the environments where we should expect to find a species as well as the environments we would not expect to find a species. With OBIS data we have in hand the locations of observations, and we can extract the environmental data at those locations.  To characterize the unoccupied environments we are going to have to sample what is called "background" (aka "background points" and "pseudo-absences".)
 
+We assume that we want the number of background points to be roughoy balanced with the number of observations. What balance means is open to interpretation, but if we have 100 observations then we woud like to have 50 to 200 background points in order to be balanced.
+
+
 We want these background samples to roughly match the regional preferences of the observations; that is we want to avoid having observations that are mostly over Georges Bank while our background samples are primarily around the Bay of Fundy. We want there to be some reasonable proximity between occupied and unoccupied environments. 
 
 Here we want to satisfy a couple of basic requirements...
@@ -90,7 +93,7 @@ Now that we have a reasonable set of observation, we now need to choose points a
 original presence observations to be returned.  We'll modify the output by adding a column identifying the month.
 
 ```{r sample_background}
-obsbkg = sample_background(wicked_thinned_aug_obs, mask, nrow(wicked_thinned_aug_obs),
+obsbkg = sample_background(wicked_thinned_aug_obs, mask, 2*nrow(wicked_thinned_aug_obs),
                            return_pres = TRUE) |>
   mutate(month = "Aug", .before = 1)    # .before tells R where to put this new column
 obsbkg
@@ -144,11 +147,13 @@ This function will have a name, `make_model_input_by_month`.  It's a long name, 
 #'   (By default "Mola mola" which gets converted to "Mola_mola")
 #' @param path the output data path to store this data (be default "model_input")
 #' @param agg_fact num, aggregation factor for aggressive thinning.  By default is 1 which means no aggregation.  For very dense observations, try a value of 2 to thin more aggressively.
+#' @param obs_to_bkg num, the ratio of observations to background
 #' @param min_obs num, this sets a threshold below which we wont try to make a model. (Default is 10)
 #' @return a named two element list of greedy and conservative model inputs - they are tables
 make_model_input_by_month  = function(mon = "Jan",
                                       obs = read_observations("Mola mola"),
                                       raster = NULL,
+                                      obs_to_bkg = 2, 
                                       species = "Mola mola",
                                       path = data_path("model_input"),
                                       agg_fact = 1, 
@@ -173,9 +178,9 @@ make_model_input_by_month  = function(mon = "Jan",
   thinned = thin_by_cell(obs, raster, agg_fact = agg_fact)
   
   # make the greedy model input by sampling the background
-  model_input = sample_background(thinned, raster, nrow(thinned),
+  model_input = sample_background(thinned, raster, nrow(thinned) * obs_to_bkg,
                                    return_pres = TRUE) |>
-    mutate(month = "Aug", .before = 1)
+    mutate(month = mon, .before = 1)
   # save the data
   filename = sprintf("%s-%s-model_input.gpkg", 
                      gsub(" ", "_", species),

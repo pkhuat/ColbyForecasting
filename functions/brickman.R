@@ -34,9 +34,6 @@ brickman_variables = function(interval = c("mon", "ann", "all")[1]){
 }
 
 
-
-
-
 brickman_database = function(path = file.path(ROOT_DATA_PATH, "brickman")){
   
   #' Read the Brickman database
@@ -67,7 +64,21 @@ brickman_build_database = function(path = brickman_path()){
 }
 
 
-
+depth_first = function(x){
+  
+  #' A function to reorder a stars object or data table so that depth comes first
+  #' 
+  #' @param x stars object or a table of data
+  #' @return the input possibly reordered if it has "depth" as a variable
+  
+  nms = names(x)
+  ix = nms == "depth"
+  if (any(ix)){
+   nms = c("depth", nms[!ix])
+   x = dplyr::select(x, dplyr::all_of(nms))
+  }
+  x
+}
 
 read_brickman = function(db = brickman_database() |>
                            dplyr::filter(scenario == "PRESENT",
@@ -140,7 +151,7 @@ read_brickman = function(db = brickman_database() |>
       dd = sapply(month.abb, function(mon) {depth}, simplify = FALSE)
       depth = do.call(c, append(dd, list(along = list(month = month.abb))))
     }
-    x = c(x, depth)
+    x = c(depth, x)
   } # add depth?
   
   return(x)

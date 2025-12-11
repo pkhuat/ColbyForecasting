@@ -317,88 +317,91 @@ Cassandra Clare
 <div class="cell-output cell-output-stdout">
 <pre><code>[1] "MLD"  "Sbtm" "SSS"  "SST"  "Tbtm" "U"    "V"   
 attr(,"to_remove")
-[1] "Xbtm"  "depth"</code></pre>
+[1] "depth" "Xbtm" </code></pre>
 </div>
 </div>
-<p>Of course, we can decide to ignore this advice, and pick which ever ones we want including keeping them all.</p>
+<p>Of course, we can decide to ignore this advice, and pick which ever ones we want including keeping them all. In fact, marine ecologists are loathe to drop depth; in coastal science in particular depth plays a significant role in ecology and biology. So, despite the high collinearity, we are going to force the use of depth.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>keep <span class="ot">=</span> <span class="fu">c</span>(<span class="st">"depth"</span>, keep)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+</div>
 <p>Whatever selection of variables we decide to model with, we will save this listing to a file. That way we can refer to it programmatically, but that comes later.</p>
 </section>
 <section id="a-closer-look-at-the-model-input-data" class="level2" data-number="2.4">
 <h2 data-number="2.4" class="anchored" data-anchor-id="a-closer-look-at-the-model-input-data"><span class="header-section-number">2.4</span> A closer look at the model input data</h2>
 <p>Before we do commit to a selection of variables, let’s turn our attention back to our presence-background points, and look at just those chosen values rather than at values drawn form across the entire domain. Let’s open the file that contains the “greedy” model input for August during the PRESENT climate scenario.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>model_input <span class="ot">=</span> <span class="fu">read_model_input</span>(<span class="at">scientificname =</span> <span class="st">"Mola mola"</span>, </span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>                               <span class="at">mon =</span> <span class="st">"Aug"</span>)</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>model_input</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>model_input <span class="ot">=</span> <span class="fu">read_model_input</span>(<span class="at">scientificname =</span> <span class="st">"Mola mola"</span>, </span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>                               <span class="at">mon =</span> <span class="st">"Aug"</span>)</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>model_input</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Simple feature collection with 1364 features and 2 fields
+<pre><code>Simple feature collection with 2046 features and 2 fields
 Geometry type: POINT
 Dimension:     XY
-Bounding box:  xmin: -74.72716 ymin: 38.868 xmax: -65.02004 ymax: 45.54306
+Bounding box:  xmin: -74.89169 ymin: 38.8679 xmax: -65.02004 ymax: 45.4608
 Geodetic CRS:  WGS 84
-# A tibble: 1,364 × 3
+# A tibble: 2,046 × 3
    month class                    geom
    &lt;chr&gt; &lt;chr&gt;             &lt;POINT [°]&gt;
- 1 Aug   presence     (-69.569 42.022)
- 2 Aug   presence     (-65.383 42.483)
- 3 Aug   presence        (-67.37 42.4)
- 4 Aug   presence       (-65.55 41.58)
- 5 Aug   presence     (-72.118 40.651)
- 6 Aug   presence       (-67.02 43.91)
- 7 Aug   presence     (-68.983 40.267)
- 8 Aug   presence (-69.61571 42.90769)
- 9 Aug   presence        (-68.56 42.2)
-10 Aug   presence     (-68.175 42.088)
-# ℹ 1,354 more rows</code></pre>
+ 1 Aug   presence (-70.28574 42.13179)
+ 2 Aug   presence        (-72.72 40.2)
+ 3 Aug   presence     (-71.312 40.473)
+ 4 Aug   presence (-68.47897 43.32831)
+ 5 Aug   presence  (-66.6635 40.91933)
+ 6 Aug   presence     (-65.067 42.617)
+ 7 Aug   presence     (-68.733 39.817)
+ 8 Aug   presence       (-68.54 43.56)
+ 9 Aug   presence (-66.88484 43.10572)
+10 Aug   presence     (-73.742 39.329)
+# ℹ 2,036 more rows</code></pre>
 </div>
 </div>
 <p>Next we’ll extract data values from our August covariates.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb9"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>variables <span class="ot">=</span> <span class="fu">extract_brickman</span>(aug, model_input, <span class="at">form =</span> <span class="st">"wide"</span>)</span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>variables</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb10"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>variables <span class="ot">=</span> <span class="fu">extract_brickman</span>(aug, model_input, <span class="at">form =</span> <span class="st">"wide"</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>variables</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 1,364 × 10
-   point   MLD  Sbtm   SSS   SST  Tbtm         U         V     Xbtm  depth
-   &lt;chr&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;    &lt;dbl&gt;  &lt;dbl&gt;
- 1 p0001  4.76  34.5  30.7  19.8  7.40  0.000146 -0.000420 0.000158  204. 
- 2 p0002  3.95  33.5  30.7  18.6  6.11 -0.0127   -0.0153   0.00717    99.7
- 3 p0003  5.09  34.8  30.7  19.1  7.33  0.00155   0.000119 0.000552  318. 
- 4 p0004  5.18  35.0  31.7  20.3  3.65  0.0238   -0.0747   0.0353   2118. 
- 5 p0005  3.93  31.8  30.5  21.4  8.28 -0.00206   0.00562  0.00213    46.3
- 6 p0006  5.36  33.9  30.6  18.8  6.94  0.00342  -0.00144  0.00131   130. 
- 7 p0007  3.99  34.5  31.1  21.2  9.20 -0.000837 -0.00310  0.00114   113. 
- 8 p0008  4.99  34.3  30.6  18.7  7.31  0.00643  -0.00311  0.00254   177. 
- 9 p0009  4.85  34.5  30.7  19.5  7.39  0.00256   0.00160  0.00107   180. 
-10 p0010  4.87  34.7  30.7  19.6  7.41 -0.0115   -0.00125  0.00411   206. 
-# ℹ 1,354 more rows</code></pre>
+<pre><code># A tibble: 2,046 × 10
+   point  depth   MLD  Sbtm   SSS   SST  Tbtm         U          V     Xbtm
+   &lt;chr&gt;  &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;     &lt;dbl&gt;      &lt;dbl&gt;    &lt;dbl&gt;
+ 1 p0001   47.4  4.44  31.9  30.6  19.7  6.03 -0.000329 -0.00207   0.000743
+ 2 p0002   53.7  4.09  32.1  30.6  22.1  8.47 -0.00191   0.0000298 0.000678
+ 3 p0003   77.2  4.30  33.4  30.7  21.7  8.95 -0.00324  -0.00149   0.00127 
+ 4 p0004  175.   5.05  34.4  30.7  18.5  7.49 -0.000634 -0.00101   0.000422
+ 5 p0005  172.   3.96  34.8  31.1  20.0  8.47 -0.00494  -0.0102    0.00404 
+ 6 p0006  103.   4.01  33.6  30.7  18.5  6.19 -0.00652  -0.00678   0.00335 
+ 7 p0007 2294.   5.73  35.0  31.9  22.5  3.56 -0.120    -0.0900    0.0958  
+ 8 p0008  153.   4.90  34.4  30.7  18.3  7.44 -0.000406 -0.00224   0.000807
+ 9 p0009  166.   5.42  34.4  30.6  18.8  7.54  0.00281  -0.0132    0.00481 
+10 p0010   39.9  4.87  32.0  31.1  23.2 11.3  -0.00302   0.00117   0.00115 
+# ℹ 2,036 more rows</code></pre>
 </div>
 </div>
 <p>We are going to call a plotting function, <code>plot_pres_vs_bg()</code>, that wants some of the data from <code>model_input</code> and some of the data in <code>variables</code>. So, we have to do some data wrangling to combine those; we’ll add <code>class</code> to <code>variables</code> and then drop the <code>point</code> column.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb11"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>variables <span class="ot">=</span> variables <span class="sc">|&gt;</span></span>
-<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">class =</span> model_input<span class="sc">$</span>class) <span class="sc">|&gt;</span>    <span class="co"># the $ extracts a column </span></span>
-<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>point)                          <span class="co"># the - means "deselect" or "drop"</span></span>
-<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>variables</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb12"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>variables <span class="ot">=</span> variables <span class="sc">|&gt;</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">class =</span> model_input<span class="sc">$</span>class) <span class="sc">|&gt;</span>    <span class="co"># the $ extracts a column </span></span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(<span class="sc">-</span>point)                          <span class="co"># the - means "deselect" or "drop"</span></span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>variables</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code># A tibble: 1,364 × 10
-     MLD  Sbtm   SSS   SST  Tbtm         U         V     Xbtm  depth class   
-   &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;    &lt;dbl&gt;  &lt;dbl&gt; &lt;chr&gt;   
- 1  4.76  34.5  30.7  19.8  7.40  0.000146 -0.000420 0.000158  204.  presence
- 2  3.95  33.5  30.7  18.6  6.11 -0.0127   -0.0153   0.00717    99.7 presence
- 3  5.09  34.8  30.7  19.1  7.33  0.00155   0.000119 0.000552  318.  presence
- 4  5.18  35.0  31.7  20.3  3.65  0.0238   -0.0747   0.0353   2118.  presence
- 5  3.93  31.8  30.5  21.4  8.28 -0.00206   0.00562  0.00213    46.3 presence
- 6  5.36  33.9  30.6  18.8  6.94  0.00342  -0.00144  0.00131   130.  presence
- 7  3.99  34.5  31.1  21.2  9.20 -0.000837 -0.00310  0.00114   113.  presence
- 8  4.99  34.3  30.6  18.7  7.31  0.00643  -0.00311  0.00254   177.  presence
- 9  4.85  34.5  30.7  19.5  7.39  0.00256   0.00160  0.00107   180.  presence
-10  4.87  34.7  30.7  19.6  7.41 -0.0115   -0.00125  0.00411   206.  presence
-# ℹ 1,354 more rows</code></pre>
+<pre><code># A tibble: 2,046 × 10
+    depth   MLD  Sbtm   SSS   SST  Tbtm         U          V     Xbtm class   
+    &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;     &lt;dbl&gt;      &lt;dbl&gt;    &lt;dbl&gt; &lt;chr&gt;   
+ 1   47.4  4.44  31.9  30.6  19.7  6.03 -0.000329 -0.00207   0.000743 presence
+ 2   53.7  4.09  32.1  30.6  22.1  8.47 -0.00191   0.0000298 0.000678 presence
+ 3   77.2  4.30  33.4  30.7  21.7  8.95 -0.00324  -0.00149   0.00127  presence
+ 4  175.   5.05  34.4  30.7  18.5  7.49 -0.000634 -0.00101   0.000422 presence
+ 5  172.   3.96  34.8  31.1  20.0  8.47 -0.00494  -0.0102    0.00404  presence
+ 6  103.   4.01  33.6  30.7  18.5  6.19 -0.00652  -0.00678   0.00335  presence
+ 7 2294.   5.73  35.0  31.9  22.5  3.56 -0.120    -0.0900    0.0958   presence
+ 8  153.   4.90  34.4  30.7  18.3  7.44 -0.000406 -0.00224   0.000807 presence
+ 9  166.   5.42  34.4  30.6  18.8  7.54  0.00281  -0.0132    0.00481  presence
+10   39.9  4.87  32.0  31.1  23.2 11.3  -0.00302   0.00117   0.00115  presence
+# ℹ 2,036 more rows</code></pre>
 </div>
 </div>
 <p>Finally, can make a specialized plot comparing our variables for each class: <code>presence</code> and <code>background</code>.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb13"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_pres_vs_bg</span>(variables, <span class="st">"class"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="fu">plot_pres_vs_bg</span>(variables, <span class="st">"class"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
 <div>
 <figure class="figure">
@@ -415,39 +418,39 @@ Geodetic CRS:  WGS 84
 <p>In R, a confguration is treated as a named list. Each element of a list is named, but beyond that there aren’t any particular rules about confugurations. You can learn more about configurations <a href="https://bigelowlab.github.io/handytandy/files-configurations.html">in this tutorial</a>.</p>
 <p>Let’s make a configuration list that holds 4 items: version identifier, species name and the names of the variables to model with.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>cfg <span class="ot">=</span> <span class="fu">list</span>(</span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">version =</span> <span class="st">"Aug"</span>,</span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">scientificname =</span> <span class="st">"Mola mola"</span>,</span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">mon =</span> <span class="st">"Aug"</span>,</span>
-<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">keep_vars =</span>  keep)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>cfg <span class="ot">=</span> <span class="fu">list</span>(</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">version =</span> <span class="st">"Aug"</span>,</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">scientificname =</span> <span class="st">"Mola mola"</span>,</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">mon =</span> <span class="st">"Aug"</span>,</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">keep_vars =</span>  keep)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 <p>We can access by name three ways using what is called “indexing” : using the <code>[[</code> indexing brackets, using the <code>$</code> indexing operator or using the <code>getElement()</code> function.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>cfg[[<span class="st">'scientificname'</span>]]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>cfg[[<span class="st">'scientificname'</span>]]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>[1] "Mola mola"</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>cfg[[<span class="dv">2</span>]]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>cfg[[<span class="dv">2</span>]]</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>[1] "Mola mola"</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb19"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>cfg<span class="sc">$</span>scientificname</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>cfg<span class="sc">$</span>scientificname</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>[1] "Mola mola"</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb21"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb21-1"><a href="#cb21-1" aria-hidden="true" tabindex="-1"></a><span class="fu">getElement</span>(cfg, <span class="st">"scientificname"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="fu">getElement</span>(cfg, <span class="st">"scientificname"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>[1] "Mola mola"</code></pre>
 </div>
-<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">getElement</span>(cfg, <span class="dv">2</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb24"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb24-1"><a href="#cb24-1" aria-hidden="true" tabindex="-1"></a><span class="fu">getElement</span>(cfg, <span class="dv">2</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
 <pre><code>[1] "Mola mola"</code></pre>
 </div>
 </div>
 <p>Now we’ll write this list to a file. First let’s set up a path where we might store these configurations, and for that matter, to store our modeling files. We’ll make a new directory, <code>models/Aug</code> and write the configuration there. We’ll use the famous “YAML” format to store the file. See the file <code>functions/configuration.R</code> for documentation on reading and writing.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>ok <span class="ot">=</span> <span class="fu">make_path</span>(<span class="fu">data_path</span>(<span class="st">"models"</span>)) <span class="co"># make a directory for models</span></span>
-<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a><span class="fu">write_configuration</span>(cfg)            </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a>ok <span class="ot">=</span> <span class="fu">make_path</span>(<span class="fu">data_path</span>(<span class="st">"models"</span>)) <span class="co"># make a directory for models</span></span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a><span class="fu">write_configuration</span>(cfg)            </span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 <p>Use the <code>Files</code> pane to navigate to your personal data directory. Open the <code>Aug.yaml</code> file - this is what you configuration looks like in YAML. Fortunately we don’t mess by hand with these much.</p>
 <pre><code>version: Aug

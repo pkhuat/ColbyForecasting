@@ -267,6 +267,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </blockquote>
 <p>Traditional ecological surveys are systematic, for a given species survey data sets tell us where the species is found and where it is absent. Using an observational data set (like <a href="https://obis.org">OBIS</a>) we only know where the species is found, which leaves us guessing about where they might not be found. This difference is what distinguishes a <em>presence-abscence</em> data set from a <em>presence-only</em> data set, and this difference guides the modeling process.</p>
 <p>When we model species distributions we are trying to define the environments where we should expect to find a species as well as the environments we would not expect to find a species. With OBIS data we have in hand the locations of observations, and we can extract the environmental data at those locations. To characterize the unoccupied environments we are going to have to sample what is called “background” (aka “background points” and “pseudo-absences”.)</p>
+<p>We assume that we want the number of background points to be roughoy balanced with the number of observations. What balance means is open to interpretation, but if we have 100 observations then we woud like to have 50 to 200 background points in order to be balanced.</p>
 <p>We want these background samples to roughly match the regional preferences of the observations; that is we want to avoid having observations that are mostly over Georges Bank while our background samples are primarily around the Bay of Fundy. We want there to be some reasonable proximity between occupied and unoccupied environments.</p>
 <p>Here we want to satisfy a couple of basic requirements…</p>
 <ul>
@@ -359,30 +360,30 @@ Note
 <h2 data-number="1.3" class="anchored" data-anchor-id="randomly-sample-background-points"><span class="header-section-number">1.3</span> Randomly sample background points</h2>
 <p>Now that we have a reasonable set of observation, we now need to choose points around those to represent the background. The <code>sample_background()</code> function requires three input arguments: the set of observations, the raster array and the number of points desired. We can also ask for the original presence observations to be returned. We’ll modify the output by adding a column identifying the month.</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>obsbkg <span class="ot">=</span> <span class="fu">sample_background</span>(wicked_thinned_aug_obs, mask, <span class="fu">nrow</span>(wicked_thinned_aug_obs),</span>
+<div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>obsbkg <span class="ot">=</span> <span class="fu">sample_background</span>(wicked_thinned_aug_obs, mask, <span class="dv">2</span><span class="sc">*</span><span class="fu">nrow</span>(wicked_thinned_aug_obs),</span>
 <span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>                           <span class="at">return_pres =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
 <span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">month =</span> <span class="st">"Aug"</span>, <span class="at">.before =</span> <span class="dv">1</span>)    <span class="co"># .before tells R where to put this new column</span></span>
 <span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>obsbkg</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output cell-output-stdout">
-<pre><code>Simple feature collection with 1364 features and 2 fields
+<pre><code>Simple feature collection with 2046 features and 2 fields
 Geometry type: POINT
 Dimension:     XY
-Bounding box:  xmin: -74.6449 ymin: 38.8797 xmax: -65.02004 ymax: 45.54306
+Bounding box:  xmin: -74.72716 ymin: 38.87438 xmax: -65.02004 ymax: 45.54306
 Geodetic CRS:  WGS 84
-# A tibble: 1,364 × 3
+# A tibble: 2,046 × 3
    month class                geometry
  * &lt;chr&gt; &lt;fct&gt;             &lt;POINT [°]&gt;
- 1 Aug   presence (-69.25557 43.24546)
- 2 Aug   presence        (-65.26 42.3)
- 3 Aug   presence       (-66.78 42.47)
- 4 Aug   presence     (-72.699 40.628)
- 5 Aug   presence     (-68.193 43.814)
- 6 Aug   presence     (-65.717 41.683)
- 7 Aug   presence     (-69.317 43.083)
- 8 Aug   presence (-70.16868 41.59624)
- 9 Aug   presence      (-65.233 43.05)
-10 Aug   presence (-68.39469 40.91889)
-# ℹ 1,354 more rows</code></pre>
+ 1 Aug   presence (-67.84244 43.55836)
+ 2 Aug   presence       (-70.65 42.95)
+ 3 Aug   presence (-68.16927 42.38727)
+ 4 Aug   presence       (-68.27 42.78)
+ 5 Aug   presence     (-66.538 43.432)
+ 6 Aug   presence (-66.45789 42.38764)
+ 7 Aug   presence (-69.54475 42.84995)
+ 8 Aug   presence (-69.13372 43.60813)
+ 9 Aug   presence (-72.62202 39.48414)
+10 Aug   presence     (-66.933 43.283)
+# ℹ 2,036 more rows</code></pre>
 </div>
 </div>
 <p>Let’s see where these fall relative to each other.</p>
@@ -440,47 +441,49 @@ Note
 <span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="co">#'   (By default "Mola mola" which gets converted to "Mola_mola")</span></span>
 <span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="co">#' @param path the output data path to store this data (be default "model_input")</span></span>
 <span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="co">#' @param agg_fact num, aggregation factor for aggressive thinning.  By default is 1 which means no aggregation.  For very dense observations, try a value of 2 to thin more aggressively.</span></span>
-<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="co">#' @param min_obs num, this sets a threshold below which we wont try to make a model. (Default is 10)</span></span>
-<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="co">#' @return a named two element list of greedy and conservative model inputs - they are tables</span></span>
-<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>make_model_input_by_month  <span class="ot">=</span> <span class="cf">function</span>(<span class="at">mon =</span> <span class="st">"Jan"</span>,</span>
-<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>                                      <span class="at">obs =</span> <span class="fu">read_observations</span>(<span class="st">"Mola mola"</span>),</span>
-<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>                                      <span class="at">raster =</span> <span class="cn">NULL</span>,</span>
-<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>                                      <span class="at">species =</span> <span class="st">"Mola mola"</span>,</span>
-<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>                                      <span class="at">path =</span> <span class="fu">data_path</span>(<span class="st">"model_input"</span>),</span>
-<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>                                      <span class="at">agg_fact =</span> <span class="dv">1</span>, </span>
-<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>                                      <span class="at">min_obs =</span> <span class="dv">10</span>){</span>
-<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>  <span class="co"># the user *must* provide a raster</span></span>
-<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">is.null</span>(raster)) <span class="fu">stop</span>(<span class="st">"please provide a raster"</span>)</span>
-<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>  <span class="co"># filter the obs</span></span>
-<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>  obs <span class="ot">=</span> obs <span class="sc">|&gt;</span></span>
-<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(month <span class="sc">==</span> mon[<span class="dv">1</span>])</span>
-<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>  <span class="co"># check that we have at least some records, if not enough then alert the user</span></span>
-<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>  <span class="co"># and return NULL</span></span>
-<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">nrow</span>(obs) <span class="sc">&lt;</span> min_obs){</span>
-<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>    <span class="fu">warning</span>(<span class="st">"sorry, this month has too few observations: "</span>, mon)</span>
-<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span>(<span class="cn">NULL</span>)</span>
-<span id="cb10-31"><a href="#cb10-31" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb10-32"><a href="#cb10-32" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb10-33"><a href="#cb10-33" aria-hidden="true" tabindex="-1"></a>  <span class="co"># make sure the output path exists, if not, make it</span></span>
-<span id="cb10-34"><a href="#cb10-34" aria-hidden="true" tabindex="-1"></a>  path <span class="ot">=</span> <span class="fu">make_path</span>(path)</span>
-<span id="cb10-35"><a href="#cb10-35" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb10-36"><a href="#cb10-36" aria-hidden="true" tabindex="-1"></a>  thinned <span class="ot">=</span> <span class="fu">thin_by_cell</span>(obs, raster, <span class="at">agg_fact =</span> agg_fact)</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="co">#' @param obs_to_bkg num, the ratio of observations to background</span></span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a><span class="co">#' @param min_obs num, this sets a threshold below which we wont try to make a model. (Default is 10)</span></span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a><span class="co">#' @return a named two element list of greedy and conservative model inputs - they are tables</span></span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a>make_model_input_by_month  <span class="ot">=</span> <span class="cf">function</span>(<span class="at">mon =</span> <span class="st">"Jan"</span>,</span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>                                      <span class="at">obs =</span> <span class="fu">read_observations</span>(<span class="st">"Mola mola"</span>),</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a>                                      <span class="at">raster =</span> <span class="cn">NULL</span>,</span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>                                      <span class="at">obs_to_bkg =</span> <span class="dv">2</span>, </span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>                                      <span class="at">species =</span> <span class="st">"Mola mola"</span>,</span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>                                      <span class="at">path =</span> <span class="fu">data_path</span>(<span class="st">"model_input"</span>),</span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>                                      <span class="at">agg_fact =</span> <span class="dv">1</span>, </span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>                                      <span class="at">min_obs =</span> <span class="dv">10</span>){</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>  <span class="co"># the user *must* provide a raster</span></span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">is.null</span>(raster)) <span class="fu">stop</span>(<span class="st">"please provide a raster"</span>)</span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a>  <span class="co"># filter the obs</span></span>
+<span id="cb10-25"><a href="#cb10-25" aria-hidden="true" tabindex="-1"></a>  obs <span class="ot">=</span> obs <span class="sc">|&gt;</span></span>
+<span id="cb10-26"><a href="#cb10-26" aria-hidden="true" tabindex="-1"></a>    <span class="fu">filter</span>(month <span class="sc">==</span> mon[<span class="dv">1</span>])</span>
+<span id="cb10-27"><a href="#cb10-27" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb10-28"><a href="#cb10-28" aria-hidden="true" tabindex="-1"></a>  <span class="co"># check that we have at least some records, if not enough then alert the user</span></span>
+<span id="cb10-29"><a href="#cb10-29" aria-hidden="true" tabindex="-1"></a>  <span class="co"># and return NULL</span></span>
+<span id="cb10-30"><a href="#cb10-30" aria-hidden="true" tabindex="-1"></a>  <span class="cf">if</span> (<span class="fu">nrow</span>(obs) <span class="sc">&lt;</span> min_obs){</span>
+<span id="cb10-31"><a href="#cb10-31" aria-hidden="true" tabindex="-1"></a>    <span class="fu">warning</span>(<span class="st">"sorry, this month has too few observations: "</span>, mon)</span>
+<span id="cb10-32"><a href="#cb10-32" aria-hidden="true" tabindex="-1"></a>    <span class="fu">return</span>(<span class="cn">NULL</span>)</span>
+<span id="cb10-33"><a href="#cb10-33" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb10-34"><a href="#cb10-34" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb10-35"><a href="#cb10-35" aria-hidden="true" tabindex="-1"></a>  <span class="co"># make sure the output path exists, if not, make it</span></span>
+<span id="cb10-36"><a href="#cb10-36" aria-hidden="true" tabindex="-1"></a>  path <span class="ot">=</span> <span class="fu">make_path</span>(path)</span>
 <span id="cb10-37"><a href="#cb10-37" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb10-38"><a href="#cb10-38" aria-hidden="true" tabindex="-1"></a>  <span class="co"># make the greedy model input by sampling the background</span></span>
-<span id="cb10-39"><a href="#cb10-39" aria-hidden="true" tabindex="-1"></a>  model_input <span class="ot">=</span> <span class="fu">sample_background</span>(thinned, raster, <span class="fu">nrow</span>(thinned),</span>
-<span id="cb10-40"><a href="#cb10-40" aria-hidden="true" tabindex="-1"></a>                                   <span class="at">return_pres =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
-<span id="cb10-41"><a href="#cb10-41" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">month =</span> <span class="st">"Aug"</span>, <span class="at">.before =</span> <span class="dv">1</span>)</span>
-<span id="cb10-42"><a href="#cb10-42" aria-hidden="true" tabindex="-1"></a>  <span class="co"># save the data</span></span>
-<span id="cb10-43"><a href="#cb10-43" aria-hidden="true" tabindex="-1"></a>  filename <span class="ot">=</span> <span class="fu">sprintf</span>(<span class="st">"%s-%s-model_input.gpkg"</span>, </span>
-<span id="cb10-44"><a href="#cb10-44" aria-hidden="true" tabindex="-1"></a>                     <span class="fu">gsub</span>(<span class="st">" "</span>, <span class="st">"_"</span>, species),</span>
-<span id="cb10-45"><a href="#cb10-45" aria-hidden="true" tabindex="-1"></a>                     mon)</span>
-<span id="cb10-46"><a href="#cb10-46" aria-hidden="true" tabindex="-1"></a>  <span class="fu">write_sf</span>(model_input, <span class="fu">file.path</span>(path, filename))</span>
-<span id="cb10-47"><a href="#cb10-47" aria-hidden="true" tabindex="-1"></a>  </span>
-<span id="cb10-48"><a href="#cb10-48" aria-hidden="true" tabindex="-1"></a>  <span class="co"># return, but disable automatic printing</span></span>
-<span id="cb10-49"><a href="#cb10-49" aria-hidden="true" tabindex="-1"></a>  <span class="fu">invisible</span>(model_input)</span>
-<span id="cb10-50"><a href="#cb10-50" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb10-38"><a href="#cb10-38" aria-hidden="true" tabindex="-1"></a>  thinned <span class="ot">=</span> <span class="fu">thin_by_cell</span>(obs, raster, <span class="at">agg_fact =</span> agg_fact)</span>
+<span id="cb10-39"><a href="#cb10-39" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb10-40"><a href="#cb10-40" aria-hidden="true" tabindex="-1"></a>  <span class="co"># make the greedy model input by sampling the background</span></span>
+<span id="cb10-41"><a href="#cb10-41" aria-hidden="true" tabindex="-1"></a>  model_input <span class="ot">=</span> <span class="fu">sample_background</span>(thinned, raster, <span class="fu">nrow</span>(thinned) <span class="sc">*</span> obs_to_bkg,</span>
+<span id="cb10-42"><a href="#cb10-42" aria-hidden="true" tabindex="-1"></a>                                   <span class="at">return_pres =</span> <span class="cn">TRUE</span>) <span class="sc">|&gt;</span></span>
+<span id="cb10-43"><a href="#cb10-43" aria-hidden="true" tabindex="-1"></a>    <span class="fu">mutate</span>(<span class="at">month =</span> mon, <span class="at">.before =</span> <span class="dv">1</span>)</span>
+<span id="cb10-44"><a href="#cb10-44" aria-hidden="true" tabindex="-1"></a>  <span class="co"># save the data</span></span>
+<span id="cb10-45"><a href="#cb10-45" aria-hidden="true" tabindex="-1"></a>  filename <span class="ot">=</span> <span class="fu">sprintf</span>(<span class="st">"%s-%s-model_input.gpkg"</span>, </span>
+<span id="cb10-46"><a href="#cb10-46" aria-hidden="true" tabindex="-1"></a>                     <span class="fu">gsub</span>(<span class="st">" "</span>, <span class="st">"_"</span>, species),</span>
+<span id="cb10-47"><a href="#cb10-47" aria-hidden="true" tabindex="-1"></a>                     mon)</span>
+<span id="cb10-48"><a href="#cb10-48" aria-hidden="true" tabindex="-1"></a>  <span class="fu">write_sf</span>(model_input, <span class="fu">file.path</span>(path, filename))</span>
+<span id="cb10-49"><a href="#cb10-49" aria-hidden="true" tabindex="-1"></a>  </span>
+<span id="cb10-50"><a href="#cb10-50" aria-hidden="true" tabindex="-1"></a>  <span class="co"># return, but disable automatic printing</span></span>
+<span id="cb10-51"><a href="#cb10-51" aria-hidden="true" tabindex="-1"></a>  <span class="fu">invisible</span>(model_input)</span>
+<span id="cb10-52"><a href="#cb10-52" aria-hidden="true" tabindex="-1"></a>}</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 </div>
 </section>
 </section>

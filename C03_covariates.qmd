@@ -57,7 +57,11 @@ keep = filter_collinear(aug, method = "vif_step")
 keep
 ```
 
-Of course, we can decide to ignore this advice, and pick which ever ones we want including keeping them all.
+Of course, we can decide to ignore this advice, and pick which ever ones we want including keeping them all. In fact, marine ecologists are loathe to drop depth; in coastal science in particular depth plays a significant role in ecology and biology.  So, despite the high collinearity, we are going to force the use of depth.
+
+```{r add_depth}
+keep = c("depth", keep)
+```
 
 Whatever selection of variables we decide to model with, we will save this listing to a file.  That way we can refer to it programmatically, but that comes later.
 

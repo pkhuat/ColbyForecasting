@@ -31,7 +31,7 @@ write_configuration = function(cfg = list(version = "v000",
   if (!"version" %in% names(cfg)) stop("input config must have version element")
   
   filename = file.path(path, sprintf("%s-%s.yaml", 
-                                     gsub(" ", "_", cfg$species[1], fixed = TRUE),
+                                     gsub(" ", "_", cfg$scientificname[1], fixed = TRUE),
                                      cfg$version[1]))
   yaml::write_yaml(cfg, filename)
 }

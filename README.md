@@ -99,9 +99,6 @@ forecasts, to understanding the complexities of forecasts’ impacts.
 - R Tutorial: [Background
   Points](https://bigelowlab.github.io/ColbyForecasting/C02_background.html)
 
-- Reading assignment for next time: [Brickman
-  2020](https://github.com/BigelowLab/ColbyForecasting/blob/main/reading/Brickman.elementa.2020.20.00055.pdf)
-
 ### 3. Monday Jan 12
 
 - Panel: Early career scientists in Ocean Forecasting
@@ -111,7 +108,8 @@ forecasts, to understanding the complexities of forecasts’ impacts.
 - R Tutorial:
   [Covariates](https://bigelowlab.github.io/ColbyForecasting/C03_covariates.html)
 
-- Reading assignment for next time: TBD
+- Reading assignment for next time: [Brickman
+  2020](https://github.com/BigelowLab/ColbyForecasting/blob/main/reading/Brickman.elementa.2020.20.00055.pdf)
 
 ## 4. Tuesday Jan 13
 

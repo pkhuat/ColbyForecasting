@@ -1,27 +1,67 @@
+source("setup.R")
+obs <- read_observations()   # now defaults to American lobster
+dplyr::glimpse(obs)
 
-read_observations = function(scientificname = "Mola mola",
-                             minimum_year = 1970, 
-                             ...){
+# functions/observations.R
+# Reads + filters OBIS observations for a species (default: American lobster)
+
+read_]observations <- function(scientificname = "Homarus americanus",
+                              minimum_year = 1970,
+                              basis_of_record = NULL,
+                              minimum_individualCount = NULL,
+                              ...) {
   
-  #' Read raw OBIS data and then filter it
-  #' 
-  #' @param scientificname chr, the name of the species to read
-  #' @param minimum_year num, the earliest year of observation to accept or 
-  #'   set to NULL to skip
-  #' @param ... other arguments passed to `read_obis()`
-  #' @return a filtered table of observations
-  
-  # Happy coding!
-  
-  # read in the raw data
-  x = read_obis(scientificname, ...) |>
+  # 1) Reading raw OBIS data and order months Jan..Dec
+  x <- read_obis(scientificname, ...) |>
     dplyr::mutate(month = factor(month, levels = month.abb))
+
+  # REQUIRED filters 
   
-  # if the user provided a non-NULL filter by year
-  if (!is.null(minimum_year)){
-    x = x |>
-      filter(year >= minimum_year)
+  # A) eventDate can't be NA
+  if ("eventDate" %in% names(x)) {
+    x <- x |> dplyr::filter(!is.na(eventDate))
+  }
+  
+  # B) points must be inside the Brickman domain (using bbox + geom)
+  if ("geom" %in% names(x)) {
+    
+    DB <- brickman_database()
+    
+    db_mask <- DB |>
+      dplyr::filter(interval == "static", var == "mask") |>
+      dplyr::slice(1)
+    
+    mask <- read_brickman(db_mask)
+    bb <- sf::st_bbox(mask)
+    
+    x <- x |>
+      dplyr::filter(
+        !is.na(geom),
+        sf::st_coordinates(geom)[,1] >= bb["xmin"],
+        sf::st_coordinates(geom)[,1] <= bb["xmax"],
+        sf::st_coordinates(geom)[,2] >= bb["ymin"],
+        sf::st_coordinates(geom)[,2] <= bb["ymax"]
+      )
+  }
+  
+  
+  # OPTIONAL filters (I am controling)
+  
+  # C) minimum year
+  if (!is.null(minimum_year) && "year" %in% names(x)) {
+    x <- x |> dplyr::filter(year >= minimum_year)
+  }
+  
+  # D) basisOfRecord filter
+  if (!is.null(basis_of_record) && "basisOfRecord" %in% names(x)) {
+    x <- x |> dplyr::filter(basisOfRecord %in% basis_of_record)
+  }
+  
+  # E) minimum individualCount filter
+  if (!is.null(minimum_individualCount) && "individualCount" %in% names(x)) {
+    x <- x |> dplyr::filter(!is.na(individualCount), individualCount >= minimum_individualCount)
   }
   
   return(x)
 }
+

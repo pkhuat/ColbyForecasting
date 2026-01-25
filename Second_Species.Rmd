@@ -1,219 +1,81 @@
 ---
-title: "My Second Species"
+title: "C01-C03 Observations, Background, and Covariates - Right Whale (Eubalaena glacialis)"
 output: github_document
 ---
 
-
-
-# Setting up
-
-As always, I start by running our setup function. Start RStudio/R, and reload my project with the menu `File > Recent Projects`. 
-
-```{r setup}
-source("setup.R")
-SPECIES = "Eubalaena"
-
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
 ```
 
-# Observations (reading in the observations I have already downloaded for that species.)
+# Setup
+
+```{r source_setup, message=FALSE, warning=FALSE}
+source("setup.R")
+SPECIES <- "Eubalaena glacialis"
+```
+
+# C01: Observations
+
+## Fetch and Read Data
+
+```{r fetch_data}
+fetch_obis(SPECIES)
+```
 
 ```{r read_obs}
-obs = read_obis(SPECIES)
-obs
+obs <- read_observations(scientificname = SPECIES)
+dim(obs)
 ```
 
-# using the `dim()` functions and returns the number of rows and number of columns. 
-```{r dim}
-dim_start = dim(obs)
-dim_start
-```
-
-## basisOfRecord
-
-Next I examine the `basisOfRecord` variable to get an understanding of how these observations I made.
+## Explore the Data
 
 ```{r basisOfRecord}
 obs |> count(basisOfRecord)
 ```
 
-# takeing a closer look at the complete records for one from each group.  
-
-```{r browse}
-human = obs |>
-  filter(basisOfRecord == "HumanObservation") |>
-  slice(1) |>
-  browse_obis()
-
-preserved = obs |>
-  filter(basisOfRecord == "PreservedSpecimen") |>
-  slice(1) |>
-  browse_obis()
-
-checklist = obs |>
-  filter(basisOfRecord == "NomenclaturalChecklist") |>
-  slice(1) |>
-  browse_obis()
-
-occurrence = obs |>
-  filter(basisOfRecord == "Occurrence") |>
-  slice(1) |>
-  browse_obis()
+```{r year_distribution}
+obs |> count(year) |> print(n = 30)
 ```
 
-
-```{r summary_obs}
-summary(obs)
+```{r month_distribution}
+obs |> count(month)
 ```
 
-## `eventDate`
+## Spatial Distribution
 
-# Filtering those
-
-```{r obs_filter_date}
-obs = obs |>
-  filter(!is.na(eventDate))
-summary(obs)
-```
- 
-##`individualCount`if I have more `NA` values for `individualCount`. 
-
-```{r obs_indcount}
-obs |>
-  filter(is.na(individualCount)) |>
-  slice(1) |>
-  browse_obis()
-```
-# In the interest of time, I can also simply filter those out of our observation dataset.
-
-```{r obs_filter_countless_dead}
-obs = obs |>
-  filter(!is.na(individualCount))
-summary(obs)
+```{r load_coast}
+coast <- read_coastline()
 ```
 
-#Well now one has to wonder about a single observation of 25 animals.
-
-```{r obs_indcount_25}
-obs |>
-  filter(individualCount == 25) |>
-  browse_obis()
+```{r plot_observations}
+ggplot() +
+  geom_sf(data = obs, alpha = 0.3, size = 0.5, color = "blue") +
+  geom_sf(data = coast, fill = "tan", color = "darkgreen") +
+  labs(title = paste("Observations -", SPECIES),
+       x = "Longitude", y = "Latitude") +
+  theme_minimal()
 ```
 
+# C02: Background Points
 
+## Load Mask
 
-## making a plot of the counts per year, with dashed lines shown the Brickman "current" cliamtology period.
-
-```{r plot_year}
-ggplot(data = obs,
-       mapping = aes(x = year)) + 
-  geom_bar() + 
-  geom_vline(xintercept = c(1982, 2013), linetype = "dashed") + 
-  labs(title = "Counts per year")
-```
-
-
-```{r filter_earlier}
-obs = obs |>
-  filter(year >= 1970)
-dim(obs)
-```
-
-That's still a lot of records.  Now let's check out the distribution across the months of the year.
-
-## I will be making models and predictions for each month of the for the 4 future projection climates. Species and observers do show some seasonality, but it that seasonality so extreme that it might be impossible to model some months because of sparse data?  Let's make a plot of the counts per month.
-
-```{r plot_month}
-ggplot(data = obs,
-       mapping = aes(x = month)) + 
-  geom_bar() + 
-  labs(title = "Counts per month")
-```
-
-# By default `ggplot` plots in alpha-numeric order, which scrambles our month order.  To fix that we have to convert the `month` in a factor type while specifying the order of the factors, and we'll use the `mutate()` function to help us. 
-
-```{r month_ordered}
-obs = obs |>
-  mutate(month = factor(month, levels = month.abb))
-
-ggplot(data = obs,
-       mapping = aes(x = month)) + 
-  geom_bar() + 
-  labs(title = "Counts per month")
-```
-
-That's better! 
-
-## We need to load the Brickman database, and then filter it for the static variable called "mask".
-
-```{r mask}
-db = brickman_database() |>
+```{r load_mask}
+db <- brickman_database() |>
   filter(scenario == "STATIC", var == "mask")
-mask = read_brickman(db)
-mask
+mask <- read_brickman(db)
 ```
 
-#To see what our mask looks like with the observations drizzled on top. 
-
-```{r plot_mask}
-plot(mask, breaks = "equal", axes = TRUE, reset = FALSE)
-plot(st_geometry(obs), pch = ".", add = TRUE)
-```
-#see some that fall into no-data areas.
-
-```{r mask_extract}
-hitOrMiss = extract_brickman(mask, obs)
-hitOrMiss
-```
-
-# tally the "value" variable.
-
-```{r tally_masked}
-count(hitOrMiss, value)
-```
-# figuring out how many records we have dropped with all of this filtering.
-
-```{r filter_the_misses}
-dim_start = dim(obs)
-obs = obs |>
-  filter(!is.na(hitOrMiss$value))
-dim_end = dim(obs)
-
-dropped_records = dim_start[1] - dim_end[1]
-dropped_records
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# Loading the data .
-
-```{r load_obs_mask}
-coast = read_coastline()
-obs = read_observations(scientificname = "Eubalaena")
-db = brickman_database() |>
-  filter(scenario == "STATIC", var == "mask")
-mask = read_brickman(db)
-```
-
+## Count Observations per Month
 
 ```{r all_observations_count}
-LON0 = -67
-LAT0 = 46
-all_counts = count(st_drop_geometry(obs), month) # counting is faster without spatial baggage
+LON0 <- -67
+LAT0 <- 46
+all_counts <- count(st_drop_geometry(obs), month)
 all_counts
 ```
 
- 
+## Plot All Observations by Month
 
 ```{r all_observations}
 ggplot() +
@@ -224,26 +86,24 @@ ggplot() +
                           y = LAT0, 
                           label = sprintf("n: %i", .data$n)),
                           size = 3) + 
-  labs(x = "Longitude", y = "Latitude", title = "All observations") +
+  labs(x = "Longitude", y = "Latitude", title = paste("All observations -", SPECIES)) +
   facet_wrap(~month)
 ```
 
-
-
-## Thinning observations
-
-
+## Thinning Observations
 
 ```{r thin_observations}
-thinned_obs = sapply(month.abb,
+thinned_obs <- sapply(month.abb,
                function(mon){ 
                  thin_by_cell(obs |> filter(month == mon), mask)
                }, simplify = FALSE) |>
   dplyr::bind_rows() 
 
-# another count
-thinned_counts = count(st_drop_geometry(thinned_obs), month)
+thinned_counts <- count(st_drop_geometry(thinned_obs), month)
+thinned_counts
+```
 
+```{r plot_thinned}
 ggplot() +
   geom_sf(data = thinned_obs, 
           alpha = 0.2, 
@@ -255,218 +115,131 @@ ggplot() +
                           y = LAT0, 
                           label = sprintf("n: %i", .data$n)),
                           size = 3) + 
-  labs(x = "Longitude", y = "Latitude", title = "Thinned observations") +
+  labs(x = "Longitude", y = "Latitude", title = paste("Thinned observations -", SPECIES)) +
   facet_wrap(~month)
 ```
 
-## Weighted sampling
-
+## Create Bias Map
 
 ```{r bias_map}
-bias_map = rasterize_point_density(obs, mask) # <-- note the original observations
+bias_map <- rasterize_point_density(obs, mask)
 
 ggplot() +
   geom_stars(data = bias_map, aes(fill = count)) +
   scale_fill_viridis_b(na.value = "transparent") +
   geom_sf(data = coast, col = "orange") + 
-  labs(x = "Longitude", y = "Latitude", title = "Bias map using all observations")
+  labs(x = "Longitude", y = "Latitude", title = paste("Bias map -", SPECIES))
 ```
 
-## Randomly sample background points
-
-
-#### But just how many background points?
-
+## Sample Background Points
 
 ```{r n_background_per_month}
-nback_avg = mean(all_counts$n) |>
-  round()
+nback_avg <- mean(all_counts$n) |> round()
 nback_avg
 ```
 
-
 ```{r sample_background}
-obsbkg = sapply(month.abb,
+obsbkg <- sapply(month.abb,
     function(mon){ 
-      sample_background(thinned_obs |> filter(month == mon), # <- just this month
+      sample_background(thinned_obs |> filter(month == mon),
                        bias_map,
-                       method = "bias",  # <-- it needs to know it's a bias map
-                       return_pres = TRUE, # <-- give me the obs back, too
-                       n = nback_avg) |>   # <-- how many points
+                       method = "bias",
+                       return_pres = TRUE,
+                       n = nback_avg) |>
         mutate(month = mon, .before = 1)
     }, simplify = FALSE) |>
   bind_rows() |>
   mutate(month = factor(month, levels = month.abb))
-obsbkg 
+
+obsbkg
 ```
 
+## Check Counts
 
-
-```{r nback_avg}
-# drop the spatial baggage to speed the tally
+```{r nback_avg_check}
 count(st_drop_geometry(obsbkg), month, class)
 ```
 
-
+## Plot Presence vs Background
 
 ```{r plot_presence_background}
 ggplot() +
   geom_sf(data = obsbkg, 
           mapping = aes(col = class),
-          alpha =  0.4, shape = "circle small", size = 1) +
+          alpha = 0.4, shape = "circle small", size = 1) +
   geom_sf(data = coast, col = "orange")  + 
-  labs(x = "Longitude", y = "Latitude", title = "All") +   
-  theme_bw() +  # <- make a simple white background
-  scale_fill_okabe_ito() +  # <-- colorblind friendly for N Record
+  labs(x = "Longitude", y = "Latitude", title = paste("Presence/Background -", SPECIES)) +   
+  theme_bw() +
+  scale_fill_okabe_ito() +
   facet_wrap(~month)
-
 ```
 
-
-# saving this.
+## Save Model Input
 
 ```{r save_model_input}
-write_model_input(obsbkg, scientificname = "Eubalaena")
+write_model_input(obsbkg, scientificname = SPECIES)
 ```
 
- 
+# C03: Covariates
 
-```{r read_model_input}
-x = read_model_input(scientificname = "Eubalaena")
-```
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-## Reading in the covariates
-
+## Read Brickman Covariates
 
 ```{r read_brickman}
-db = brickman_database() |>
+db <- brickman_database() |>
   dplyr::filter(scenario == "PRESENT", interval == "mon")
-present = read_brickman(db)
+present <- read_brickman(db)
+present
 ```
 
-## Make a `pairs` plot
-
+## Pairs Plot
 
 ```{r pairs}
 pairs(present)
 ```
 
-
-
-## Identify the most independent variables (and the most collinear)
-
-
+## Identify Collinear Variables
 
 ```{r filter_collinear}
-keep = filter_collinear(present, method = "cor_caret", cutoff = 0.65)
+keep <- filter_collinear(present, method = "cor_caret", cutoff = 0.65)
 keep
 ```
 
 ```{r drop_me}
-drop_me = attr(keep, "to_remove")
+drop_me <- attr(keep, "to_remove")
 drop_me
 ```
 
+## Add Depth and Month
 
 ```{r add_depth_and_month}
-keep = c("depth", "month", keep)
+keep <- c("depth", "month", keep)
+keep
 ```
 
+## Save Configuration
 
-
-## A closer look at the model input data
-
-```{r present_model_input}
-model_input = read_model_input(scientificname = "Mola mola")
-model_input
-```
-
-
-
-```{r reload_brickman}
-present = read_brickman(add = c("depth"))
-```
-
-
-```{r extract}
-variables = extract_brickman(present, model_input, form = "wide")
-variables
-```
-
-
-
-```{r wrangle_variables}
-variables = variables |>
-  mutate(class = model_input$class) |>    # the $ extracts a column 
-  select(-.id)                            # the minus means "deselect" or "drop"
-variables
-```
-
-
-```{r plot_pres_vs_bg, warning = FALSE}
-plot_pres_vs_bg(variables |> select(-month), "class")
-```
-
-
-
-## Saving a file to keep track of modeling choices
-
-
-```{r make_config}
-cfg = list(
+```{r save_config}
+cfg <- list(
+  scientificname = SPECIES,
   version = "v1",
-  scientificname = "Eubalaena",
-  background = "average of observations per month",
-  keep_vars =  keep)
+  keep = keep
+)
+write_configuration(cfg)
 ```
 
+## Verify Configuration
 
-```{r indexing}
-cfg[['scientificname']]
-cfg[[2]]
-cfg$scientificname
-getElement(cfg, "scientificname")
-getElement(cfg, 2)
+```{r read_config}
+cfg <- read_configuration(scientificname = SPECIES, version = "v1")
+cfg
 ```
 
+# Summary
 
-```{r save config}
-ok = make_path(data_path("models")) # make a directory for models
-write_configuration(cfg)            
-```
+Prepared Right Whale (Eubalaena glacialis) data for modeling:
 
-
-```{r save_input_data}
-write_model_input(variables, scientificname = "Eubalaena", version = "v1")
-```
-
-
-
+- Original observations: `r nrow(obs)`
+- Thinned observations: `r nrow(thinned_obs)`
+- Background points per month: `r nback_avg`
+- Total model input records: `r nrow(obsbkg)`
+- Selected covariates: `r paste(keep, collapse = ", ")`

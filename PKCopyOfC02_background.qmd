@@ -36,11 +36,11 @@ We also will need the Brickman mask and the observation data. Note that we are m
 OK - load the data we need.
 
 ```{r load_obs_mask}
-coast <- read_coastline()
-obs <- read_observations(scientificname = "Homarus americanus")
-db <- brickman_database() |>
+coast = read_coastline()
+obs = read_observations(scientificname = "Eubalaena")
+db = brickman_database() |>
   filter(scenario == "STATIC", var == "mask")
-mask <- read_brickman(db)
+mask = read_brickman(db)
 ```
 
 Let's start with a simple plot of the observations per month. We'll make an array of maps with one constructed per month.  We'll use the [ggplot2 plotting system](https://ggplot2.tidyverse.org/) which is a powerful system for layering components of a plot.
@@ -48,9 +48,9 @@ Let's start with a simple plot of the observations per month. We'll make an arra
 We will want to add a notation to each plot showing the number of points that month.  To make that table we use the `count()` function from the [dplyr R package](https://dplyr.tidyverse.org/). We also found the best location to print the count (through trial and error) so we define that, too.
 
 ```{r all_observations_count}
-LON0 <- -67
-LAT0 <- 46
-all_counts <- count(st_drop_geometry(obs), month)
+LON0 = -67
+LAT0 = 46
+all_counts = count(st_drop_geometry(obs), month) # counting is faster without spatial baggage
 all_counts
 ```
 
@@ -65,7 +65,7 @@ ggplot() +
                           y = LAT0, 
                           label = sprintf("n: %i", .data$n)),
                           size = 3) + 
-  labs(x = "Longitude", y = "Latitude", title = "All observations - Homarus americanus") +
+  labs(x = "Longitude", y = "Latitude", title = "All observations") +
   facet_wrap(~month)
 ```
 
@@ -76,15 +76,14 @@ Some of those points are densely distributed depending upon the month.  In fact,
 Thinning is the process we use to sub-sample observations so that they are more evenly sampled across the spatial domain. We do this to discourage accidental sampling bias. The [tidysdm package]() provides a nice function, `thin_by_cell()`, that "thins" by allowing only one observation per cell in the Brickman data.  We'll iterate through each month
 
 ```{r thin_observations}
-thinned_obs <- sapply(month.abb,
+thinned_obs = sapply(month.abb,
                function(mon){ 
                  thin_by_cell(obs |> filter(month == mon), mask)
                }, simplify = FALSE) |>
   dplyr::bind_rows() 
 
-# Count thinned observations
-thinned_counts <- count(st_drop_geometry(thinned_obs), month)
-thinned_counts
+# another count
+thinned_counts = count(st_drop_geometry(thinned_obs), month)
 
 ggplot() +
   geom_sf(data = thinned_obs, 
@@ -97,7 +96,7 @@ ggplot() +
                           y = LAT0, 
                           label = sprintf("n: %i", .data$n)),
                           size = 3) + 
-  labs(x = "Longitude", y = "Latitude", title = "Thinned observations - Homarus americanus") +
+  labs(x = "Longitude", y = "Latitude", title = "Thinned observations") +
   facet_wrap(~month)
 ```
 
@@ -108,13 +107,13 @@ We now have thinned the observations to just `r nrow(thinned_obs)` records compa
 Uh oh, so how do we retain that clustering importance?  The answer is to build a sampling bias map using the original observations that influences where we sample.  Let's build a bias map by counting the number of observations in each cell - we'll use the original observations for the entire year (regardless of month.)
 
 ```{r bias_map}
-bias_map <- rasterize_point_density(obs, mask)
+bias_map = rasterize_point_density(obs, mask) # <-- note the original observations
 
 ggplot() +
   geom_stars(data = bias_map, aes(fill = count)) +
   scale_fill_viridis_b(na.value = "transparent") +
   geom_sf(data = coast, col = "orange") + 
-  labs(x = "Longitude", y = "Latitude", title = "Bias map - Homarus americanus")
+  labs(x = "Longitude", y = "Latitude", title = "Bias map using all observations")
 ```
 Depending upon your distribution, the clustering may be more or less apparent.  For *Mola mola* it's dominated by a wide even spread with a few "peak" spots.
 
@@ -127,26 +126,26 @@ Now that we have a reasonable set of observation and a sampling bias map, we now
 But how many background points should we get for each month? Should be try balance by month?  Or balance by taking the average for all months.  Let's do the latter, but it might be worth exploring that further.
 
 ```{r n_background_per_month}
-nback_avg <- mean(all_counts$n) |> round()
+nback_avg = mean(all_counts$n) |>
+  round()
 nback_avg
 ```
 
 So, here we go.  We shall use the [`sapply` iterator](https://bigelowlab.github.io/handytandy/iterations.html) to step through each month. For each month we'll use the thinned observations and the annual bias map to sample for background. At the end we'll have a list of monthly tables which we'll bind into one giant table, and we'll refresh the month column to be a factor (of monthly groupings of course!)
 
 ```{r sample_background}
-obsbkg <- sapply(month.abb,
+obsbkg = sapply(month.abb,
     function(mon){ 
-      sample_background(thinned_obs |> filter(month == mon),
+      sample_background(thinned_obs |> filter(month == mon), # <- just this month
                        bias_map,
-                       method = "bias",
-                       return_pres = TRUE,
-                       n = nback_avg) |>
+                       method = "bias",  # <-- it needs to know it's a bias map
+                       return_pres = TRUE, # <-- give me the obs back, too
+                       n = nback_avg) |>   # <-- how many points
         mutate(month = mon, .before = 1)
     }, simplify = FALSE) |>
   bind_rows() |>
   mutate(month = factor(month, levels = month.abb))
-
-obsbkg
+obsbkg 
 ```
 
 A quick tally of the class by month confirms that our `nback_avg` of `r nback_avg` points is used consistently every month.
@@ -155,32 +154,6 @@ A quick tally of the class by month confirms that our `nback_avg` of `r nback_av
 # drop the spatial baggage to speed the tally
 count(st_drop_geometry(obsbkg), month, class)
 ```
-```{r plot_presence_background}
-obsbkg <- sapply(month.abb,
-    function(mon){ 
-      sample_background(thinned_obs |> filter(month == mon),
-                       bias_map,
-                       method = "bias",
-                       return_pres = TRUE,
-                       n = nback_avg) |>
-        mutate(month = mon, .before = 1)
-    }, simplify = FALSE) |>
-  bind_rows() |>
-  mutate(month = factor(month, levels = month.abb))
-
-obsbkg
-
-```
-
-
-Step 10: Check counts by month and class
-```{r plot_presence_background}
-count(st_drop_geometry(obsbkg), month, class)
-
-```
-
-
-
 
 Let's see where these presence/background points fall relative to each other.
 
@@ -188,11 +161,11 @@ Let's see where these presence/background points fall relative to each other.
 ggplot() +
   geom_sf(data = obsbkg, 
           mapping = aes(col = class),
-          alpha = 0.4, shape = "circle small", size = 1) +
+          alpha =  0.4, shape = "circle small", size = 1) +
   geom_sf(data = coast, col = "orange")  + 
-  labs(x = "Longitude", y = "Latitude", title = "Presence/Background - Homarus americanus") +   
-  theme_bw() +
-  scale_fill_okabe_ito() +
+  labs(x = "Longitude", y = "Latitude", title = "All") +   
+  theme_bw() +  # <- make a simple white background
+  scale_fill_okabe_ito() +  # <-- colorblind friendly for N Record
   facet_wrap(~month)
 
 ```
@@ -202,14 +175,13 @@ These would be the data locations we feed into the model.  So is that reasonable
 Let's save this.
 
 ```{r save_model_input}
-write_model_input(obsbkg, scientificname = "Homarus americanus")
+write_model_input(obsbkg, scientificname = "Eubalaena")
 ```
 
 Note that there is a function for reading model input files, too. 
 
 ```{r read_model_input}
-x <- read_model_input(scientificname = "Homarus americanus")
-x
+x = read_model_input(scientificname = "Eubalaena")
 ```
 
 

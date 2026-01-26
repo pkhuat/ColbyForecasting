@@ -1,3 +1,4 @@
+
 # assignment_script_1.R
 # Coding Assignment 5
 # Goal: RCP4.5 (2055) SST at buoy M01 vs month
@@ -48,3 +49,4 @@ print(p)
 
 
 ggsave("images/M01_SST.png", plot = p, width = 7, height = 4)
+

@@ -17,7 +17,7 @@ knitr::opts_chunk$set(
   fig.width = 9,
   fig.height = 5
 )
-source("setup.R")
+source("/home/pkhuat28/ColbyForecasting/setup.R")
 SPECIES = "Homarus americanus"
 BEST_MODEL = "default_maxent"
 

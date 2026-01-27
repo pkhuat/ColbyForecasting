@@ -2,7 +2,7 @@
 title: "American Lobster: Where Will They Go?"
 subtitle: "Species Distribution Modeling Under Climate Change"
 author: "Paung Khuat (PK)"
-date: "January 2026"
+date: "January 27, 2026"
 output: 
   ioslides_presentation:
     widescreen: true
@@ -54,9 +54,10 @@ I used **Species Distribution Modeling (SDM)** to answer this.
 
 ## Step 1: Get the Data
 
-I downloaded **168,938** lobster records from OBIS.
+I downloaded  **209,167** lobster records from OBIS.
 
-After cleaning (removing missing values, filtering by year), I kept good quality records.
+After cleaning (removing missing values, filtering by year), I kept **104,630** good quality records (Some had missing dates.Some had missing individual counts. Some were outside the Brickman model area. Some were before 1970
+)
 
 ```{r load_data}
 obs = read_obis(SPECIES) |>
@@ -112,20 +113,26 @@ Lobsters avoid deep water and very warm temperatures!
 
 ## Step 4: Train the Model
 
-I trained 4 models:
+I trained 4 models and compared their confusion matrices:
 
-| Model | Result |
-|-------|--------|
-| GLM | Too simple |
-| Random Forest | Okay |
-| Boosted Trees | Only predicts "no lobster" |
-| **MaxEnt** | **Best! Finds where lobsters are** ✓ |
+| Model | Accuracy | Found Lobsters? | Problem |
+|-------|----------|-----------------|---------|
+| GLM | 85.4% | 0 out of 1244 | Predicts all "no lobster" |
+| Boosted Trees | 85.4% | 0 out of 1244 | Predicts all "no lobster" |
+| Random Forest | 84.9% | 2 out of 1244 | Almost all "no lobster" |
+| **MaxEnt** | 57.2% | **1033 out of 1244** | **Actually finds lobsters!** |
 
-**I chose MaxEnt** because it correctly identifies lobster habitat.
+## Why I Chose MaxEnt
+
+- Other models have higher accuracy BUT they cheat!
+- They just say "no lobster everywhere" (easy to be right most of the time)
+- **MaxEnt correctly identifies 83% of lobster locations**
+- For species distribution, finding presence is more important!
+
 
 ## Step 5: Present Day Prediction
 
-```{r nowcast, fig.width = 10, fig.height = 5.5}
+```{r nowcast, fig.width = 10, fig.height = 5.5, results='hide'}
 cfg = read_configuration(scientificname = SPECIES, version = "v1", path = data_path("models"))
 db = brickman_database()
 
@@ -152,7 +159,7 @@ This matches real lobster behavior!
 
 ## Step 6: Future Prediction (RCP 8.5, Year 2075)
 
-```{r rcp85_2075, fig.width = 10, fig.height = 5.5}
+```{r rcp85_2075, fig.width = 10, fig.height = 5.5, results='hide'}
 covars_rcp85_2075 = read_brickman(db |> filter(scenario == "RCP85", year == 2075, interval == "mon"),
                                   add = c("depth", "month")) |>
   select(all_of(cfg$keep))
@@ -166,7 +173,7 @@ plot_prediction(forecast_rcp85_2075[BEST_MODEL]) +
 
 ## Compare: Now vs 2075
 
-```{r compare, fig.width = 10, fig.height = 5}
+```{r compare, fig.width = 10, fig.height = 5,results='hide'}
 library(patchwork)
 
 p1 = plot_prediction(nowcast[BEST_MODEL]) + 
@@ -236,5 +243,5 @@ Lobsters will move **northward** and to **deeper water**.
 <div class="centered" style="margin-top: 80px; font-size: 0.8em;">
 *JP297Dj: Ocean Forecasting - AI, Ecology, and Data Justice*
 
-*Colby College, January 2026*
+*Colby College, January 27, 2026*
 </div>

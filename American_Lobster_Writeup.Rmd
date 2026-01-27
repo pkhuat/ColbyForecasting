@@ -1,0 +1,288 @@
+---
+title: "How Climate Change May Affect American Lobster Habitat in the Gulf of Maine"
+author: "Paung Khuat (PK)"
+date: "January 27, 2026"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: flatly
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE, 
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 10,
+  fig.height = 6
+)
+source("/home/pkhuat28/ColbyForecasting/setup.R")
+SPECIES = "Homarus americanus"
+BEST_MODEL = "default_maxent"
+
+theme_map <- function() {
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
+    axis.text.y = element_text(size = 7)
+  )
+}
+```
+
+# Introduction
+
+The American lobster (*Homarus americanus*) is one of the most important marine species in the Northwest Atlantic Ocean. This lobster lives along the Atlantic coast of North America, from Labrador in Canada down to North Carolina in the United States (Holthuis, 1991). However, it is most common in the cold waters of the Gulf of Maine and Georges Bank. The species is not just important for the ocean ecosystem. It is also very important for people who make their living from fishing.
+
+The lobster fishery is worth a lot of money. In 2023, commercial landings of American lobster in the United States were 121 million pounds, worth about $633 million (NOAA Fisheries, 2024). Maine alone produces most of the lobster catch. The lobster industry supports thousands of fishing families and coastal communities. Because of this, any change to lobster populations would affect many people's jobs and lives.
+
+But now there is a big problem. The Gulf of Maine is warming very fast. Scientists found that between 2004 and 2013, the Gulf of Maine warmed faster than 99.9% of the global ocean (Pershing et al., 2015). This fast warming is changing where marine species can live. Some species are moving north to find cooler water. This is already happening with Atlantic cod, which has collapsed in the Gulf of Maine partly because of warming (Pershing et al., 2015).
+
+In this study, I ask a simple but important question: **Where will American lobster be able to live in the future if the ocean keeps warming?** To answer this question, I built a Species Distribution Model (SDM) that connects lobster locations to ocean conditions. Then I used climate projections to predict where lobster habitat might be in 2055 and 2075.
+
+Understanding future lobster habitat is critical for several reasons. First, fisheries managers need to know where lobster will be so they can set the right rules for fishing. Second, fishing communities need time to prepare if lobster are going to move away from their traditional fishing grounds. Third, conservationists want to protect the ocean areas that will still be good for lobster in the future. This study tries to help with all of these goals.
+
+# Data
+
+## Occurrence Data
+
+I got lobster occurrence data from the Ocean Biodiversity Information System (OBIS). OBIS is a global database where scientists share records of where marine species have been found. It is free to use and has millions of records for thousands of species (OBIS, 2024).
+
+For American lobster, I downloaded 209,167 occurrence records from OBIS. Each record tells us where someone saw or caught a lobster, and when. But not all records are good enough to use for modeling. Some records were missing important information like the date or the count of individuals. Some records were very old, from before 1970. I removed these problem records.
+
+After filtering, I had 104,630 good records to work with. These records span from 1970 to present day. Most records are from the 1990s onwards, when survey effort increased. The records show that lobster are found throughout the Gulf of Maine, with higher concentrations in coastal shelf areas.
+
+```{r load_data}
+obs = read_obis(SPECIES) |>
+  filter(!is.na(eventDate), !is.na(individualCount)) |>
+  mutate(month = factor(month, levels = month.abb)) |>
+  filter(year >= 1970)
+
+db = brickman_database() |> filter(scenario == "STATIC", var == "mask")
+mask = read_brickman(db)
+hitOrMiss = extract_brickman(mask, obs)
+obs = obs |> filter(!is.na(hitOrMiss$value))
+coast = read_coastline()
+```
+
+```{r obs_map, fig.cap = "Figure 1: American Lobster occurrence records by month. Blue dots show where lobsters were observed."}
+ggplot() +
+  geom_sf(data = obs, alpha = 0.3, size = 0.3, color = "darkblue") +
+  geom_sf(data = coast, col = "orange", linewidth = 0.3) +
+  facet_wrap(~month, ncol = 4) +
+  labs(title = "Where Lobsters Are Found (by Month)") +
+  theme_map() +
+  theme(strip.text = element_text(size = 8))
+```
+
+**Strengths of this data**: OBIS data comes from many different sources, including research surveys, fishery observations, and museum collections. This gives a broad picture of where lobster are found. The data is also free and easy to access, which is important for transparency and reproducibility.
+
+**Weaknesses of this data**: The data has sampling bias. More records come from areas where scientists do more surveys. Also, older records are less common, so we know less about historical distributions. Some records might have location errors. I tried to handle these problems by filtering carefully and using spatial methods in my modeling.
+
+## Environmental Data
+
+To understand what makes good lobster habitat, I need to know about ocean conditions. For this, I used the Brickman oceanographic model. This model provides detailed information about the Northwest Atlantic Ocean, including temperature, salinity, depth, and other conditions (Brickman et al., 2016).
+
+The Brickman model is special because it gives us not just present conditions, but also future projections. Scientists use climate scenarios called Representative Concentration Pathways (RCPs) to describe different possible futures:
+
+- **RCP 4.5**: A moderate emissions scenario where humans take some action to reduce greenhouse gases
+- **RCP 8.5**: A high emissions scenario, sometimes called "business as usual," where emissions keep rising
+
+I used both scenarios to see how lobster habitat might change. I also looked at two future time periods: 2055 (about 30 years from now) and 2075 (about 50 years from now).
+
+The environmental variables I used include:
+
+- Sea surface temperature (SST) - Lobster prefer cold water
+- Bottom temperature (Tbtm) - Important because lobster live on the ocean floor
+- Salinity (SSS, Sbtm) - Lobster need the right salt levels
+- Mixed layer depth (MLD) - Affects nutrient mixing
+- Ocean depth - Lobster live at certain depths
+
+**Strengths of this data**: The Brickman model gives high-resolution data specifically for the Northwest Atlantic. It includes both present conditions and future projections using established climate scenarios. The model has been validated against real observations.
+
+**Weaknesses of this data**: All models have uncertainty. The future projections depend on which climate scenario actually happens. Also, the model might not capture all local conditions perfectly. Climate models generally do better for large-scale patterns than small-scale details.
+
+# Modeling
+
+## Approach
+
+I built a Species Distribution Model (SDM) to predict where lobster can live. An SDM is a type of model that learns the relationship between species locations and environmental conditions. Once it learns this relationship, it can predict whether a species could live in new places or under different conditions.
+
+My modeling process followed these steps:
+
+1. **Prepare presence data**: Thin the lobster occurrence points so they are not too crowded in one place
+2. **Create background points**: Generate random points where lobster might or might not be found
+3. **Extract environmental data**: Get the ocean conditions at each point
+4. **Check for collinearity**: Remove variables that are too similar to each other
+5. **Split data spatially**: Divide data into training and testing sets using spatial blocks
+6. **Train multiple models**: Try different machine learning algorithms
+7. **Evaluate and select**: Choose the best model based on test performance
+8. **Predict**: Make habitat maps for present and future conditions
+
+## Model Selection
+
+I trained four different types of models:
+
+1. **Generalized Linear Model (GLM)** - A simple statistical model
+2. **Random Forest (RF)** - A machine learning model that uses many decision trees
+3. **Boosted Trees (btree)** - Another tree-based model that learns iteratively
+4. **MaxEnt** - A model designed specifically for species distribution modeling
+
+After training all models, I compared their performance using confusion matrices. A confusion matrix shows how well a model distinguishes between presence and background points. Here is what I found:
+
+| Model | Accuracy | True Positives (out of 1,244) | Notes |
+|-------|----------|-------------------------------|-------|
+| GLM | 85.4% | 0 | Predicts all background |
+| btree | 85.4% | 0 | Predicts all background |
+| RF | 84.9% | 2 | Almost all background |
+| MaxEnt | 57.2% | 1,033 | Correctly finds presence |
+
+**Why I chose MaxEnt**: Even though GLM and btree had higher overall accuracy, they got this by predicting everything as background. This is useless for finding where lobster actually are. MaxEnt found 1,033 out of 1,244 true presence locations. For species distribution modeling, finding where the species actually lives is the whole point. MaxEnt is also designed specifically for SDM work and handles presence-background data well (Phillips et al., 2006).
+
+## Climate Projections
+
+Using my trained MaxEnt model, I made habitat suitability predictions for:
+
+- **Present conditions** (based on 1982-2013 climate)
+- **RCP 4.5 in 2055** (moderate warming)
+- **RCP 4.5 in 2075** (moderate warming, later)
+- **RCP 8.5 in 2055** (high warming)
+- **RCP 8.5 in 2075** (high warming, later)
+
+The predictions show probability maps where warmer colors mean higher chance of suitable habitat.
+
+```{r load_models, results='hide'}
+cfg = read_configuration(scientificname = SPECIES, version = "v1", path = data_path("models"))
+db = brickman_database()
+
+present_conditions = read_brickman(db |> filter(scenario == "PRESENT", interval == "mon"),
+                                   add = c("depth", "month")) |>
+  select(all_of(cfg$keep))
+
+model_fits = read_model_fit(filename = "Homarus_americanus-v1-model_fits")
+nowcast = predict_stars(model_fits, present_conditions)
+```
+
+```{r present_map, fig.height = 8, fig.cap = "Figure 2: Present-day habitat suitability for American Lobster. Orange/yellow = high suitability, purple = low suitability.", results='hide'}
+plot_prediction(nowcast[BEST_MODEL]) + 
+  ggtitle("Present Day: Lobster Habitat Suitability") +
+  theme_map()
+```
+
+```{r future_prep, results='hide'}
+covars_rcp85_2075 = read_brickman(db |> filter(scenario == "RCP85", year == 2075, interval == "mon"),
+                                  add = c("depth", "month")) |>
+  select(all_of(cfg$keep))
+forecast_rcp85_2075 = predict_stars(model_fits, covars_rcp85_2075)
+```
+
+```{r future_map, fig.height = 8, fig.cap = "Figure 3: Predicted habitat suitability for year 2075 under RCP 8.5 (high emissions scenario).", results='hide'}
+plot_prediction(forecast_rcp85_2075[BEST_MODEL]) + 
+  ggtitle("Year 2075 (High Emissions): Future Lobster Habitat") +
+  theme_map()
+```
+
+```{r compare_plot, fig.width = 12, fig.height = 6, fig.cap = "Figure 4: Side-by-side comparison of present and 2075 habitat suitability.", results='hide'}
+library(patchwork)
+
+p1 = plot_prediction(nowcast[BEST_MODEL]) + 
+  ggtitle("PRESENT") + 
+  theme_map() +
+  theme(legend.position = "none")
+
+p2 = plot_prediction(forecast_rcp85_2075[BEST_MODEL]) + 
+  ggtitle("2075 (RCP 8.5)") + 
+  theme_map()
+
+p1 | p2
+```
+
+## Key Results
+
+My predictions show several important patterns:
+
+1. **Present day**: Lobster habitat is concentrated in the Gulf of Maine and coastal shelf areas. The species shows seasonal variation, with different suitable areas in summer versus winter.
+
+2. **Moderate warming (RCP 4.5)**: By 2055 and 2075, suitable habitat shifts northward. Some southern areas become less suitable. Overall habitat remains relatively stable.
+
+3. **High warming (RCP 8.5)**: Changes are more dramatic. By 2075, significant reduction in habitat suitability in the southern Gulf of Maine. Northern areas and Canadian waters become more important.
+
+The model suggests that under high warming, lobster may need to move north to find suitable conditions. This matches what scientists have already observed happening with other species like Atlantic cod.
+
+# Implications
+
+## For Fisheries Management
+
+My results have several implications for fisheries management:
+
+**Quota allocation**: Currently, fishing quotas are set based on where lobster have historically been. If lobster move north, quotas may need to shift too. Managers might need to allow more fishing in northern areas while reducing pressure in southern areas.
+
+**International cooperation**: As lobster move into Canadian waters, there may need to be more coordination between U.S. and Canadian fisheries managers. Cross-border stocks require cross-border management.
+
+**Long-term planning**: Fisheries management often focuses on the next few years. My results suggest managers need to think decades ahead. Decisions made today will affect fishing communities for a long time.
+
+## For Fishing Communities
+
+**Economic impacts**: Communities in southern New England may see fewer lobster in the future. This could hurt the local economy. Communities need time to adapt, perhaps by diversifying what they fish or developing new industries.
+
+**Opportunity in the north**: Maine and Canadian communities might see more lobster. But this requires investment in boats, processing facilities, and trained workers. Planning should start now.
+
+**Climate adaptation**: Fishing families have adapted to changes before. Providing good information about future conditions helps them make smart decisions for their families and businesses.
+
+## For Conservation
+
+**Protecting future habitat**: Conservation efforts should protect areas that will be good lobster habitat in the future, not just areas that are good today. This is called "climate-smart conservation."
+
+**Ecosystem effects**: Lobster are important in the food web. They eat mollusks, worms, and other invertebrates. They are eaten by fish, octopus, and other predators. If lobster move, the whole ecosystem changes.
+
+**Marine protected areas**: Locations of marine protected areas might need to be reconsidered as species shift. An area that protects lobster today might not have many lobster in 50 years.
+
+## Limitations and Next Steps
+
+My study has limitations that should guide future work:
+
+1. **Model uncertainty**: All predictions have uncertainty. Different models give somewhat different results. Future studies could use ensemble approaches that combine multiple models.
+
+2. **Climate uncertainty**: We do not know exactly how much the climate will change. I used two scenarios, but reality might be different.
+
+3. **Biological factors**: My model uses only environmental data. It does not include things like food availability, disease, or fishing pressure. These factors also affect where lobster can live.
+
+4. **Population dynamics**: I predict suitable habitat, but not actual population size. A species might have suitable habitat but still have low numbers due to other factors.
+
+Future studies could address these limitations by:
+
+- Including more biological variables
+- Using ensemble modeling approaches
+- Connecting SDMs to population models
+- Validating predictions with new survey data as climate changes
+
+## Conclusion
+
+The Gulf of Maine is warming fast, and American lobster habitat is likely to shift northward in coming decades. My Species Distribution Model predicts that moderate warming (RCP 4.5) will cause gradual changes, while high warming (RCP 8.5) will cause more dramatic range contractions in southern areas. These changes have important implications for fisheries management, fishing communities, and conservation.
+
+The lobster fishery supports thousands of jobs and coastal communities. By understanding how climate change may affect lobster habitat, we can help these communities prepare for the future. Scientists, managers, and fishing communities need to work together to ensure that both lobster populations and the people who depend on them can thrive in a changing ocean.
+
+# References
+
+Brickman, D., Alexander, M. A., Pershing, A., Scott, J. D., & Wang, Z. (2016). Projections of physical conditions in the Gulf of Maine in 2050. *Elementa: Science of the Anthropocene*, 4, 000034.
+
+Holthuis, L. B. (1991). *Marine Lobsters of the World*. FAO Species Catalogue, Volume 13. Food and Agriculture Organization.
+
+NOAA Fisheries. (2024). American Lobster. Retrieved from https://www.fisheries.noaa.gov/species/american-lobster
+
+OBIS. (2024). Ocean Biodiversity Information System. Retrieved from https://obis.org
+
+Pershing, A. J., Alexander, M. A., Hernandez, C. M., Kerr, L. A., Le Bris, A., Mills, K. E., ... & Thomas, A. C. (2015). Slow adaptation in the face of rapid warming leads to collapse of the Gulf of Maine cod fishery. *Science*, 350(6262), 809-812.
+
+Phillips, S. J., Anderson, R. P., & Schapire, R. E. (2006). Maximum entropy modeling of species geographic distributions. *Ecological Modelling*, 190(3-4), 231-259.
+
+Wahle, R., Butler, M., Cockcroft, A., & MacDiarmid, A. (2011). Homarus americanus. *IUCN Red List of Threatened Species*.
+
+---
+
+*Word count: approximately 2,000 words*
+
+*This paper was written for JP297Dj: Ocean Forecasting - AI, Ecology, and Data Justice*
+
+*Colby College, January 27, 2026*

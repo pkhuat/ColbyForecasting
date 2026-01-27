@@ -20,6 +20,15 @@ For any coding project we need to load the necessary packages. We have a single 
 ```{r setup, warning = FALSE, message = FALSE}
 source("setup.R")
 SPECIES = "Homarus americanus"
+
+# Custom theme for maps to prevent x-axis label collision
+theme_map <- function() {
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
+    axis.text.y = element_text(size = 7)
+  )
+}
 ```
 
 ## Spatial Data Overview
@@ -169,9 +178,7 @@ dim(obs)
 
 ## Save Filtered Observations
 
-```{r save_obs}
-write_observations(obs, scientificname = SPECIES)
-```
+The filtered observations are now ready for background sampling.
 
 Final count comparison:
 
@@ -190,7 +197,7 @@ cat("Records removed:", dim_start[1] - dim_final[1], "\n")
 
 ```{r load_obs_mask}
 coast = read_coastline()
-obs = read_observations(scientificname = SPECIES)
+# obs is already filtered from C01 above
 db = brickman_database() |>
   filter(scenario == "STATIC", var == "mask")
 mask = read_brickman(db)
@@ -213,7 +220,8 @@ ggplot() +
                           size = 3) + 
   labs(x = "Longitude", y = "Latitude", 
        title = paste(SPECIES, "- All observations")) +
-  facet_wrap(~month)
+  facet_wrap(~month) +
+  theme_map()
 ```
 
 ## Thinning Observations
@@ -242,7 +250,8 @@ ggplot() +
                           size = 3) + 
   labs(x = "Longitude", y = "Latitude", 
        title = paste(SPECIES, "- Thinned observations")) +
-  facet_wrap(~month)
+  facet_wrap(~month) +
+  theme_map()
 
 cat("Original observations:", nrow(obs), "\n")
 cat("After thinning:", nrow(thinned_obs), "\n")
@@ -260,7 +269,8 @@ ggplot() +
   scale_fill_viridis_b(na.value = "transparent") +
   geom_sf(data = coast, col = "orange") + 
   labs(x = "Longitude", y = "Latitude", 
-       title = paste(SPECIES, "- Bias map"))
+       title = paste(SPECIES, "- Bias map")) +
+  theme_map()
 ```
 
 ## Sample Background Points
@@ -300,9 +310,9 @@ ggplot() +
   geom_sf(data = coast, col = "orange")  + 
   labs(x = "Longitude", y = "Latitude", 
        title = paste(SPECIES, "- Presence and Background")) +   
-  theme_bw() +
   scale_fill_okabe_ito() +
-  facet_wrap(~month)
+  facet_wrap(~month) +
+  theme_map()
 ```
 
 ## Save Model Input

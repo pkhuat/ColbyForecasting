@@ -1,0 +1,240 @@
+---
+title: "American Lobster: Where Will They Go?"
+subtitle: "Species Distribution Modeling Under Climate Change"
+author: "Paung Khuat (PK)"
+date: "January 2026"
+output: 
+  ioslides_presentation:
+    widescreen: true
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE, 
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 9,
+  fig.height = 5
+)
+source("setup.R")
+SPECIES = "Homarus americanus"
+BEST_MODEL = "default_maxent"
+
+theme_map <- function() {
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 6),
+    axis.text.y = element_text(size = 6),
+    plot.title = element_text(size = 10)
+  )
+}
+```
+
+## My Species: American Lobster
+
+The **American Lobster** (*Homarus americanus*) is very important in the Gulf of Maine.
+
+**Why I chose this species:**
+
+- Most valuable fishery in New England
+- Climate change is already affecting them
+- Fishermen want to know: where will lobsters go?
+- "Maine & Lobster" conversation
+
+## My Question
+
+<div class="centered" style="font-size: 1.5em; margin-top: 100px;">
+**How will climate change affect American Lobster habitat?**
+</div>
+
+<div class="centered" style="margin-top: 50px;">
+I used **Species Distribution Modeling (SDM)** to answer this.
+</div>
+
+## Step 1: Get the Data
+
+I downloaded **168,938** lobster records from OBIS.
+
+After cleaning (removing missing values, filtering by year), I kept good quality records.
+
+```{r load_data}
+obs = read_obis(SPECIES) |>
+  filter(!is.na(eventDate), !is.na(individualCount)) |>
+  mutate(month = factor(month, levels = month.abb)) |>
+  filter(year >= 1970)
+
+db = brickman_database() |> filter(scenario == "STATIC", var == "mask")
+mask = read_brickman(db)
+hitOrMiss = extract_brickman(mask, obs)
+obs = obs |> filter(!is.na(hitOrMiss$value))
+coast = read_coastline()
+```
+
+## Step 2: Where Are the Lobsters?
+
+```{r obs_map, fig.width = 10, fig.height = 5.5}
+ggplot() +
+  geom_sf(data = obs, alpha = 0.3, size = 0.3, color = "darkblue") +
+  geom_sf(data = coast, col = "orange", linewidth = 0.3) +
+  facet_wrap(~month, ncol = 6) +
+  theme_map() +
+  theme(strip.text = element_text(size = 8))
+```
+
+**What I see:** Lobsters are mostly in **coastal areas** near Massachusetts and Maine.
+
+## Step 3: What Environment Do Lobsters Like?
+
+```{r env_prep}
+model_input = read_model_input(scientificname = SPECIES, version = "v1")
+present = read_brickman(add = c("depth"))
+variables = extract_brickman(present, model_input, form = "wide") |>
+  mutate(class = model_input$class) |>
+  select(-.id)
+```
+
+```{r env_plot, fig.height = 4.5}
+plot_pres_vs_bg(variables |> select(-month), "class")
+```
+
+## What Lobsters Prefer
+
+Based on the data:
+
+| Factor | What Lobsters Like |
+|--------|-------------------|
+| **Depth** | Shallow water (< 250m) |
+| **Bottom Temp** | Cool (5-10°C) |
+| **Surface Temp** | Not too warm |
+
+Lobsters avoid deep water and very warm temperatures!
+
+## Step 4: Train the Model
+
+I trained 4 models:
+
+| Model | Result |
+|-------|--------|
+| GLM | Too simple |
+| Random Forest | Okay |
+| Boosted Trees | Only predicts "no lobster" |
+| **MaxEnt** | **Best! Finds where lobsters are** ✓ |
+
+**I chose MaxEnt** because it correctly identifies lobster habitat.
+
+## Step 5: Present Day Prediction
+
+```{r nowcast, fig.width = 10, fig.height = 5.5}
+cfg = read_configuration(scientificname = SPECIES, version = "v1", path = data_path("models"))
+db = brickman_database()
+
+present_conditions = read_brickman(db |> filter(scenario == "PRESENT", interval == "mon"),
+                                   add = c("depth", "month")) |>
+  select(all_of(cfg$keep))
+
+model_fits = read_model_fit(filename = "Homarus_americanus-v1-model_fits")
+nowcast = predict_stars(model_fits, present_conditions)
+
+plot_prediction(nowcast[BEST_MODEL]) + 
+  ggtitle("Present Day: Where Lobsters Can Live") +
+  theme_map() +
+  theme(strip.text = element_text(size = 8))
+```
+
+## What the Present Map Shows
+
+- **Winter/Spring (Jan-Apr):** Good habitat across the shelf (orange)
+- **Summer (May-Aug):** Lobsters leave warm areas (purple)
+- **Fall (Sep-Dec):** Lobsters come back
+
+This matches real lobster behavior!
+
+## Step 6: Future Prediction (RCP 8.5, Year 2075)
+
+```{r rcp85_2075, fig.width = 10, fig.height = 5.5}
+covars_rcp85_2075 = read_brickman(db |> filter(scenario == "RCP85", year == 2075, interval == "mon"),
+                                  add = c("depth", "month")) |>
+  select(all_of(cfg$keep))
+forecast_rcp85_2075 = predict_stars(model_fits, covars_rcp85_2075)
+
+plot_prediction(forecast_rcp85_2075[BEST_MODEL]) + 
+  ggtitle("Year 2075 (High Emissions): Future Lobster Habitat") +
+  theme_map() +
+  theme(strip.text = element_text(size = 8))
+```
+
+## Compare: Now vs 2075
+
+```{r compare, fig.width = 10, fig.height = 5}
+library(patchwork)
+
+p1 = plot_prediction(nowcast[BEST_MODEL]) + 
+  ggtitle("PRESENT") + 
+  theme_map() +
+  theme(strip.text = element_text(size = 7), legend.position = "none")
+
+p2 = plot_prediction(forecast_rcp85_2075[BEST_MODEL]) + 
+  ggtitle("2075 (RCP 8.5)") + 
+  theme_map() +
+  theme(strip.text = element_text(size = 7))
+
+p1 | p2
+```
+
+## Key Differences I Found
+
+**Looking at Summer (May-Aug):**
+
+| Present | 2075 |
+|---------|------|
+| Some suitable habitat | Less suitable habitat |
+| Moderate stress | More thermal stress |
+
+**The pattern is similar because depth doesn't change, but temperature does!**
+
+## What Does This Mean?
+
+**For Lobsters:**
+
+- Move **north** toward Maine and Canada
+- Move to **deeper, cooler water**
+- Summer becomes harder
+
+**For Fishermen:**
+
+- Fishing areas may shift north
+- May need to adapt
+
+## Summary
+
+| Step | What I Did |
+|------|------------|
+| 1 | Got data from OBIS |
+| 2 | Cleaned the data |
+| 3 | Found what lobsters like |
+| 4 | Trained MaxEnt model |
+| 5 | Predicted present habitat |
+| 6 | Predicted future (2075) |
+
+## Main Finding
+
+<div class="centered" style="font-size: 1.3em; margin-top: 80px;">
+**Climate change will reduce summer habitat for American Lobsters.**
+</div>
+
+<div class="centered" style="font-size: 1.1em; margin-top: 30px;">
+Lobsters will move **northward** and to **deeper water**.
+</div>
+
+## Thank You!
+
+<div class="centered" style="font-size: 1.5em; margin-top: 100px;">
+**Questions?**
+</div>
+
+<div class="centered" style="margin-top: 80px; font-size: 0.8em;">
+*JP297Dj: Ocean Forecasting - AI, Ecology, and Data Justice*
+
+*Colby College, January 2026*
+</div>

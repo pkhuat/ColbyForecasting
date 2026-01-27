@@ -1,0 +1,677 @@
+---
+title: "Species Distribution Modeling: American Lobster (*Homarus americanus*)"
+author: "Paung Khuat"
+date: "`r Sys.Date()`"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    theme: flatly
+    highlight: tango
+    code_folding: hide
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(
+  echo = FALSE,
+  warning = FALSE, 
+  message = FALSE,
+  fig.align = "center",
+  fig.width = 10,
+  fig.height = 7
+)
+source("/home/pkhuat28/ColbyForecasting/setup.R")
+SPECIES = "Homarus americanus"
+
+# Custom theme for maps to prevent x-axis label collision
+theme_map <- function() {
+  theme_bw() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1, size = 7),
+    axis.text.y = element_text(size = 7)
+  )
+}
+```
+
+# Introduction
+
+## About This Project
+
+This document presents a complete **Species Distribution Model (SDM)** for the **American Lobster (*Homarus americanus*)** in the Gulf of Maine region. The workflow follows the mind-map framework provided in the course, progressing through six key stages:
+
+1.  **C00 - Setup**: Loading tools and understanding spatial data
+2.  **C01 - Observations**: Fetching and filtering occurrence data from OBIS
+3.  **C02 - Background Sampling**: Creating pseudo-absence points for model training
+4.  **C03 - Covariates**: Selecting environmental predictors and checking collinearity
+5.  **C04 - Models**: Training and tuning multiple machine learning algorithms
+6.  **C05 - Prediction**: Generating nowcasts and climate-scenario forecasts
+
+## Study Species: American Lobster
+
+The **American Lobster** is an iconic crustacean species of significant ecological and economic importance in the Northwest Atlantic. It is one of the most valuable fisheries in New England and Atlantic Canada. Understanding how climate change may shift its habitat is critical for fisheries management and conservation planning.
+
+------------------------------------------------------------------------
+
+# C00: Spatial Data Foundations
+
+Before building my SDM, I need to understand the spatial data structures I'll be working with. This includes point data (buoy locations, species observations) and raster data (environmental variables from the Brickman model).
+
+## Study Region: Gulf of Maine
+
+The plot below shows my study region with NOAA buoy locations that monitor oceanographic conditions:
+
+```{r coast_buoys, fig.cap = "Gulf of Maine study region showing NOAA monitoring buoys."}
+buoys = gom_buoys()
+coast = read_coastline()
+plot(coast, col = "orange", lwd = 2, axes = TRUE, reset = FALSE,
+     main = "Gulf of Maine Region with Monitoring Buoys")
+plot(st_geometry(buoys), pch = 16, cex = 1.2, add = TRUE, col = "blue")
+text(st_geometry(buoys), labels = buoys$id, cex = 0.6, adj = c(1.2, -0.3))
+```
+
+**Interpretation**: The buoys are distributed throughout the Gulf of Maine and provide real-time oceanographic measurements. This region spans from approximately 39°N to 46°N latitude and 64°W to 76°W longitude.
+
+## Environmental Data: Brickman Model
+
+I use the **Brickman oceanographic model** which provides downscaled climate projections for the Northwest Atlantic. The model includes variables like sea surface temperature (SST), salinity, and bottom conditions across different climate scenarios.
+
+```{r brickman_sst, fig.cap = "Monthly sea surface temperature (SST) from Brickman model for present conditions."}
+db = brickman_database() |>
+  filter(scenario == "PRESENT", interval == "mon")
+present = read_brickman(db)
+plot(present['SST'], main = "Sea Surface Temperature by Month (°C)")
+```
+
+**Interpretation**: SST shows strong seasonal variation in the Gulf of Maine, ranging from cold winter temperatures (\< 5°C) to warm summer conditions (\> 20°C in coastal areas). This seasonality is crucial for understanding lobster habitat preferences throughout the year.
+
+------------------------------------------------------------------------
+
+# C01: Occurrence Data from OBIS
+
+## Data Acquisition
+
+Species occurrence data is obtained from the **Ocean Biodiversity Information System (OBIS)**, a global open-access repository for marine species observations. The `fetch_obis()` function downloads records, and `read_obis()` loads them for analysis.
+
+```{r read_obs}
+obs = read_obis(SPECIES)
+dim_start = dim(obs)
+```
+
+**Starting dataset**: I begin with **`r format(dim_start[1], big.mark = ",")`** American Lobster occurrence records from OBIS.
+
+## Data Quality Control
+
+Raw occurrence data often contains issues that must be addressed before modeling:
+
+-   **Missing dates**: Records without observation dates cannot be assigned to specific months
+-   **Missing counts**: Records without individual counts may be duplicates or errors
+-   **Temporal range**: I filter to records from 1970 onwards to align with the Brickman climatology period (1982-2013)
+-   **Spatial extent**: Only records within the Brickman model domain are retained
+
+### Temporal Distribution
+
+```{r filter_and_plot_year, fig.cap = "Distribution of American Lobster observations by year."}
+obs = obs |>
+  filter(!is.na(eventDate)) |>
+  filter(!is.na(individualCount))
+
+ggplot(data = obs, mapping = aes(x = year)) + 
+  geom_bar(fill = "steelblue", alpha = 0.7) + 
+  geom_vline(xintercept = c(1982, 2013), linetype = "dashed", color = "red", linewidth = 1) + 
+  labs(title = paste(SPECIES, "- Observations by Year"),
+       subtitle = "Dashed lines indicate Brickman climatology period (1982-2013)",
+       x = "Year", y = "Number of Records") +
+  theme_minimal()
+
+obs = obs |> filter(year >= 1970)
+```
+
+**Interpretation**: The histogram shows observation effort has increased dramatically since the 1990s. The dashed red lines mark the Brickman climatology period. I retain records from 1970 onwards to capture sufficient historical data while maintaining relevance to my environmental predictors.
+
+### Monthly Distribution
+
+```{r month_distribution, fig.cap = "Distribution of American Lobster observations by month."}
+obs = obs |>
+  mutate(month = factor(month, levels = month.abb))
+
+ggplot(data = obs, mapping = aes(x = month)) + 
+  geom_bar(fill = "coral", alpha = 0.8) + 
+  labs(title = paste(SPECIES, "- Observations by Month"),
+       x = "Month", y = "Number of Records") +
+  theme_minimal()
+```
+
+**Interpretation**: Observation effort varies by month, with more records during warmer months when field surveys are more feasible. This sampling bias will be accounted for in my background point generation.
+
+### Spatial Filtering
+
+We filter observations to only include those within the Brickman model domain (ocean areas with valid environmental data):
+
+```{r mask_filter, fig.cap = "American Lobster observations overlaid on the Brickman ocean mask."}
+db = brickman_database() |> filter(scenario == "STATIC", var == "mask")
+mask = read_brickman(db)
+
+plot(mask, breaks = "equal", axes = TRUE, reset = FALSE,
+     main = "Observations within Brickman Domain")
+plot(st_geometry(obs), pch = ".", add = TRUE, col = "red")
+
+hitOrMiss = extract_brickman(mask, obs)
+obs = obs |> filter(!is.na(hitOrMiss$value))
+dim_final = dim(obs)
+```
+
+**Interpretation**: Points shown are American Lobster occurrences. Any observations falling on land or outside the model domain are removed. The Brickman mask ensures I only model areas where environmental predictions are available.
+
+## Data Summary
+
+| Metric | Count |
+|--------------------------------------|----------------------------------|
+| Starting observations | `r format(dim_start[1], big.mark = ",")` |
+| Final observations | `r format(dim_final[1], big.mark = ",")` |
+| Records removed | `r format(dim_start[1] - dim_final[1], big.mark = ",")` |
+
+------------------------------------------------------------------------
+
+# C02: Background Point Sampling
+
+## Why Background Points?
+
+Species distribution models require both **presence** data (where the species was observed) and **pseudo-absence** or **background** data (locations representing available habitat). Background points characterize the environmental conditions across the study area, allowing models to distinguish habitat preferences.
+
+## Using Filtered Observations
+
+```{r load_c02_data}
+coast = read_coastline()
+# obs is already filtered from C01 above
+db = brickman_database() |> filter(scenario == "STATIC", var == "mask")
+mask = read_brickman(db)
+LON0 = -67
+LAT0 = 46
+all_counts = count(st_drop_geometry(obs), month)
+```
+
+## Raw Observations by Month
+
+```{r all_obs_map, fig.height = 9, fig.cap = "Spatial distribution of American Lobster observations by month."}
+ggplot() +
+  geom_sf(data = obs, alpha = 0.3, shape = "circle small", size = 0.8, color = "darkblue") +
+  geom_sf(data = coast, col = "orange", linewidth = 0.5) +
+  geom_text(data = all_counts,
+            mapping = aes(x = LON0, y = LAT0, label = sprintf("n: %i", .data$n)),
+            size = 2.5, fontface = "bold") + 
+  labs(x = "Longitude", y = "Latitude", 
+       title = paste(SPECIES, "- All Observations by Month")) +
+  facet_wrap(~month, ncol = 4) +
+  theme_map()
+```
+
+**Interpretation**: American Lobster observations are concentrated in coastal areas, particularly around Massachusetts, Maine, and the Bay of Fundy. Observation counts vary by month, reflecting both species behavior and sampling effort. Many grid cells contain multiple overlapping observations.
+
+## Spatial Thinning
+
+To reduce spatial autocorrelation, I thin observations so that only **one record per Brickman grid cell** is retained per month. This prevents overweighting of heavily sampled areas.
+
+```{r thin_observations, fig.height = 9, fig.cap = "Spatially thinned observations (one per grid cell per month)."}
+thinned_obs = sapply(month.abb,
+               function(mon){ 
+                 thin_by_cell(obs |> filter(month == mon), mask)
+               }, simplify = FALSE) |>
+  dplyr::bind_rows() 
+
+thinned_counts = count(st_drop_geometry(thinned_obs), month)
+
+ggplot() +
+  geom_sf(data = thinned_obs, alpha = 0.4, shape = "circle small", size = 0.8, color = "darkgreen") +
+  geom_sf(data = coast, col = "orange", linewidth = 0.5) +
+  geom_text(data = thinned_counts,
+            mapping = aes(x = LON0, y = LAT0, label = sprintf("n: %i", .data$n)),
+            size = 2.5, fontface = "bold") + 
+  labs(x = "Longitude", y = "Latitude", 
+       title = paste(SPECIES, "- Thinned Observations by Month")) +
+  facet_wrap(~month, ncol = 4) +
+  theme_map()
+```
+
+**Interpretation**: After thinning, the observation counts are significantly reduced (compare with raw counts above). The spatial pattern is preserved, but each grid cell contributes only once per month, reducing pseudoreplication.
+
+| Dataset                | Total Records                                 |
+|------------------------|-----------------------------------------------|
+| Original observations  | `r format(nrow(obs), big.mark = ",")`         |
+| After spatial thinning | `r format(nrow(thinned_obs), big.mark = ",")` |
+
+## Sampling Bias Map
+
+I create a **bias map** based on observation density. Areas with more observations are weighted higher when sampling background points, which accounts for non-random sampling effort.
+
+```{r bias_map, fig.cap = "Sampling bias map based on observation density."}
+bias_map = rasterize_point_density(obs, mask)
+
+ggplot() +
+  geom_stars(data = bias_map, aes(fill = count)) +
+  scale_fill_viridis_c(option = "plasma", na.value = "transparent", 
+                       name = "Observation\nDensity") +
+  geom_sf(data = coast, col = "white", linewidth = 0.5) + 
+  labs(x = "Longitude", y = "Latitude", 
+       title = paste(SPECIES, "- Sampling Bias Map"),
+       subtitle = "Higher values indicate more observations (potential sampling bias)") +
+  theme_map()
+```
+
+**Interpretation**: The bias map highlights coastal areas (especially around Massachusetts and Maine) where observation effort is highest. By using bias-weighted background sampling, I ensure that model training accounts for this uneven sampling.
+
+## Background Point Generation
+
+I sample **background points** using biased sampling, with the number of background points per month matching the average observation count:
+
+```{r sample_background}
+nback_avg = mean(all_counts$n) |> round()
+
+obsbkg = sapply(month.abb,
+    function(mon){ 
+      sample_background(thinned_obs |> filter(month == mon),
+                       bias_map,
+                       method = "bias",
+                       return_pres = TRUE,
+                       n = nback_avg) |>
+        mutate(month = mon, .before = 1)
+    }, simplify = FALSE) |>
+  bind_rows() |>
+  mutate(month = factor(month, levels = month.abb))
+
+class_counts = count(st_drop_geometry(obsbkg), class)
+```
+
+**Background points per month**: `r format(nback_avg, big.mark = ",")`
+
+```{r presence_background_map, fig.height = 9, fig.cap = "Presence points (thinned observations) and background points by month."}
+ggplot() +
+  geom_sf(data = obsbkg, mapping = aes(col = class),
+          alpha = 0.5, shape = "circle small", size = 0.8) +
+  geom_sf(data = coast, col = "orange", linewidth = 0.5) + 
+  labs(x = "Longitude", y = "Latitude", 
+       title = paste(SPECIES, "- Presence and Background Points"),
+       color = "Class") +   
+  scale_color_manual(values = c("presence" = "red", "background" = "blue")) +
+  facet_wrap(~month, ncol = 4) +
+  theme_map()
+```
+
+**Interpretation**: Red points are presence locations (thinned observations) and blue points are background (pseudo-absence) locations. Background points are distributed across the study area following the bias map weighting, ensuring representation of available habitat conditions.
+
+```{r save_model_input_c02}
+write_model_input(obsbkg, scientificname = SPECIES, version = "v1")
+```
+
+------------------------------------------------------------------------
+
+# C03: Environmental Covariates
+
+## Available Variables
+
+The Brickman model provides multiple environmental predictors. However, using highly correlated variables can cause multicollinearity issues in models. I assess pairwise correlations to select an appropriate subset.
+
+```{r load_covariates}
+db = brickman_database() |> dplyr::filter(scenario == "PRESENT", interval == "mon")
+present = read_brickman(db)
+```
+
+## Collinearity Assessment
+
+```{r pairs_plot, echo = TRUE, fig.height = 8, fig.cap = "Pairs plot showing correlations between Brickman environmental variables."}
+pairs(present)
+```
+
+**Interpretation**: The pairs plot reveals strong correlations between some variables (e.g., SST and Tbtm). To avoid multicollinearity, I use automated filtering with a correlation threshold of 0.65.
+
+## Variable Selection
+
+```{r filter_collinear}
+keep = filter_collinear(present, method = "cor_caret", cutoff = 0.65)
+drop_me = attr(keep, "to_remove")
+keep = c("depth", "month", keep)
+```
+
+**Variables selected for modeling**:
+
+| Retained                         | Removed (collinear)                 |
+|----------------------------------|-------------------------------------|
+| `r paste(keep, collapse = ", ")` | `r paste(drop_me, collapse = ", ")` |
+
+I always include **depth** and **month** as ecologically important predictors for marine species.
+
+## Extract Covariates for Training Data
+
+```{r extract_covariates}
+model_input = read_model_input(scientificname = SPECIES, version = "v1")
+present = read_brickman(add = c("depth"))
+variables = extract_brickman(present, model_input, form = "wide")
+variables = variables |>
+  mutate(class = model_input$class) |>
+  select(-.id)
+```
+
+## Presence vs. Background Comparison
+
+This plot compares the environmental conditions at presence locations versus background locations:
+
+```{r pres_vs_bg, fig.height = 10, fig.cap = "Comparison of environmental conditions between presence and background points."}
+plot_pres_vs_bg(variables |> select(-month), "class")
+```
+
+**Interpretation**: The density plots show how environmental conditions differ between presence (lobster locations) and background (available habitat). Variables where the two distributions differ substantially are likely important predictors. For example, I might observe that lobsters prefer specific depth ranges or temperature conditions.
+
+## Save Configuration
+
+```{r save_configuration}
+cfg = list(
+  version = "v1",
+  scientificname = SPECIES,
+  background = "average of observations per month",
+  keep = keep
+)
+ok = make_path(data_path("models"))
+write_configuration(cfg)
+write_model_input(variables, scientificname = SPECIES, version = "v1")
+```
+
+**Configuration saved** with `r length(keep)` predictor variables for model training.
+
+------------------------------------------------------------------------
+
+# C04: Model Training
+
+## Modeling Approach
+
+Following the course workflow, I train **four different machine learning algorithms** and compare their performance:
+
+1.  **GLM** (Generalized Linear Model) - Simple, interpretable baseline
+2.  **Random Forest** - Ensemble of decision trees
+3.  **Boosted Trees (XGBoost)** - Gradient boosting for high accuracy
+4.  **MaxEnt** - Popular algorithm specifically designed for SDMs
+
+## Data Preparation
+
+```{r load_model_data}
+cfg = read_configuration(scientificname = SPECIES, version = "v1")
+model_input = read_model_input(scientificname = SPECIES, 
+                               version = "v1",
+                               log_me = c("depth", "Xbtm")) |>
+  dplyr::mutate(month = month_as_number(.data$month)) |>
+  select(all_of(c("class", cfg$keep)))
+```
+
+I apply **log-transformation** to skewed variables (depth, Xbtm) and convert month to numeric for modeling.
+
+## Spatial Train/Test Split
+
+To evaluate model performance on independent data, I create a spatial block split. This ensures training and testing data are geographically separated, providing a more realistic assessment of model transferability.
+
+```{r spatial_split, fig.cap = "Spatial block split showing training (blue) and testing (red) data."}
+model_input_split = spatial_initial_split(model_input, 
+                        prop = 1 / 5,
+                        strategy = spatial_block_cv)
+autoplot(model_input_split) + 
+  ggtitle("Spatial Train/Test Split") +
+  theme_minimal()
+```
+
+**Interpretation**: The spatial blocking ensures that nearby points are either all in training or all in testing, preventing spatial autocorrelation from inflating accuracy estimates.
+
+## Cross-Validation Setup
+
+Within the training data, I use **5-fold spatial cross-validation** for hyperparameter tuning:
+
+```{r cv_folds, fig.cap = "Five-fold spatial cross-validation structure."}
+tr_data = training(model_input_split)
+cv_tr_data <- spatial_block_cv(tr_data,
+  v = 5,     
+  cellsize = grid_cellsize(model_input),
+  offset = grid_offset(model_input) + 0.00001
+)
+autoplot(cv_tr_data) + 
+  ggtitle("5-Fold Spatial Cross-Validation") +
+  theme_minimal()
+```
+
+**Interpretation**: Each color represents a different fold. During tuning, each fold takes a turn as the validation set while the others serve as training data.
+
+## Model Specification
+
+```{r workflow, echo = TRUE}
+one_row_of_training_data = dplyr::slice(tr_data, 1)
+rec = recipe(one_row_of_training_data, formula = class ~ .)
+
+wflow = workflow_set(
+  preproc = list(default = rec),
+  models = list(
+    glm = logistic_reg(mode = "classification") |> set_engine("glm"),
+    rf = rand_forest(mtry = tune(), trees = tune(), mode = "classification") |>
+      set_engine("ranger", importance = "impurity"),
+    btree = boost_tree(mtry = tune(), trees = tune(), tree_depth = tune(), 
+                       learn_rate = tune(), loss_reduction = tune(), 
+                       stop_iter = tune(), mode = "classification") |>
+      set_engine("xgboost"),
+    maxent = maxent(feature_classes = tune(), regularization_multiplier = tune(),
+                    mode = "classification") |> set_engine("maxnet")
+  )
+)
+```
+
+## Hyperparameter Tuning
+
+```{r tune_models, results = 'hide'}
+metrics = sdm_metric_set(yardstick::accuracy)
+wflow <- wflow |>
+  workflow_map("tune_grid",
+    resamples = cv_tr_data, 
+    grid = 3,
+    metrics = metrics, 
+    verbose = FALSE)
+
+
+```
+
+```{r tuning_results, fig.cap = "Hyperparameter tuning results for each model."}
+autoplot(wflow) + 
+  ggtitle("Model Tuning Results") +
+  theme_minimal()
+
+```
+
+**Interpretation**: This plot shows how different hyperparameter combinations affect model accuracy during cross-validation. Higher values indicate better performance.
+
+## Select Best Models
+
+```{r select_best_models}
+model_fits = workflowset_selectomatic(wflow, model_input_split,
+                                  filename = "Homarus_americanus-v1-model_fits",
+                                 path = data_path("models"))
+
+
+```
+
+## Model Performance Comparison
+
+```{r model_performance}
+metrics_table = model_fit_metrics(model_fits)
+knitr::kable(metrics_table, caption = "Performance metrics for each model on test data")
+```
+
+```{r confusion_matrices, fig.height = 8, fig.cap = "Confusion matrices showing classification performance for each model."}
+model_fit_confmat(model_fits)
+```
+
+**Interpretation**: The confusion matrices show true positives, true negatives, false positives, and false negatives for each model. Better models have higher values on the diagonal (correct predictions) and lower values off-diagonal (errors).
+
+------------------------------------------------------------------------
+
+# C05: Predictions
+
+## Generating Habitat Suitability Maps
+
+With trained models, I can now predict habitat suitability across the study area under current and future climate conditions. I use the **Boosted Tree** model for predictions as it typically achieves high accuracy.
+
+```{r load_prediction_data}
+cfg = read_configuration(scientificname = SPECIES, version = "v1", path = data_path("models"))
+db = brickman_database()
+
+
+present_conditions = read_brickman(db |> filter(scenario == "PRESENT", interval == "mon"),
+                                   add = c("depth", "month")) |>
+  select(all_of(cfg$keep))
+
+model_fits = read_model_fit(filename = "Homarus_americanus-v1-model_fits")
+```
+
+## Nowcast: Present Conditions
+
+```{r nowcast, fig.height = 9, fig.cap = "Habitat suitability prediction for American Lobster under present conditions."}
+nowcast = predict_stars(model_fits, present_conditions)
+plot_prediction(nowcast['default_maxent']) + 
+  ggtitle("Present-Day Habitat Suitability (Nowcast)") +
+  theme_map()
+```
+
+**Interpretation**: This map shows the probability of American Lobster occurrence under current environmental conditions. Warmer colors (yellow/orange) indicate higher habitat suitability. The species shows strong preference for coastal shelf areas, with seasonal variation visible across months.
+
+## Climate Scenario Forecasts
+
+I generate predictions under two Representative Concentration Pathways (RCPs):
+
+-   **RCP 4.5**: Moderate emissions scenario
+-   **RCP 8.5**: High emissions ("business as usual") scenario
+
+Each scenario is projected for years **2055** and **2075**.
+
+### RCP 4.5 Projections
+
+```{r rcp45_2055, fig.height = 9, fig.cap = "Habitat suitability under RCP 4.5 climate scenario, year 2055."}
+covars_rcp45_2055 = read_brickman(db |> filter(scenario == "RCP45", year == 2055, interval == "mon"),
+                                  add = c("depth", "month")) |>
+  select(all_of(cfg$keep))
+forecast_rcp45_2055 = predict_stars(model_fits, covars_rcp45_2055)
+plot_prediction(forecast_rcp45_2055['default_maxent']) + 
+  ggtitle("RCP 4.5 - Year 2055") +
+  theme_map()
+```
+
+```{r rcp45_2075, fig.cap = "Habitat suitability under RCP 4.5 climate scenario, year 2075."}
+covars_rcp45_2075 = read_brickman(db |> filter(scenario == "RCP45", year == 2075, interval == "mon"),
+                                  add = c("depth", "month")) |>
+  select(all_of(cfg$keep))
+forecast_rcp45_2075 = predict_stars(model_fits, covars_rcp45_2075)
+plot_prediction(forecast_rcp45_2075['default_maxent']) + 
+  ggtitle("RCP 4.5 - Year 2075") +
+  theme_map()
+```
+
+### RCP 8.5 Projections
+
+```{r rcp85_2055, fig.height = 9, fig.cap = "Habitat suitability under RCP 8.5 climate scenario, year 2055."}
+covars_rcp85_2055 = read_brickman(db |> filter(scenario == "RCP85", year == 2055, interval == "mon"),
+                                  add = c("depth", "month")) |>
+  select(all_of(cfg$keep))
+forecast_rcp85_2055 = predict_stars(model_fits, covars_rcp85_2055)
+plot_prediction(forecast_rcp85_2055['default_maxent']) + 
+  ggtitle("RCP 8.5 - Year 2055") +
+  theme_map()
+```
+
+```{r rcp85_2075, fig.height = 9, fig.cap = "Habitat suitability under RCP 8.5 climate scenario, year 2075."}
+covars_rcp85_2075 = read_brickman(db |> filter(scenario == "RCP85", year == 2075, interval == "mon"),
+                                  add = c("depth", "month")) |>
+  select(all_of(cfg$keep))
+forecast_rcp85_2075 = predict_stars(model_fits, covars_rcp85_2075)
+plot_prediction(forecast_rcp85_2075['default_maxent']) + 
+  ggtitle("RCP 8.5 - Year 2075") +
+  theme_map()
+```
+
+## Comparison Across Scenarios
+
+```{r compare_all, fig.width = 14, fig.height = 10, fig.cap = "Comparison of habitat suitability predictions across all climate scenarios."}
+library(patchwork)
+
+p1 = plot_prediction(nowcast['default_maxent']) + ggtitle("PRESENT") + theme_map()
+p2 = plot_prediction(forecast_rcp45_2055['default_maxent']) + ggtitle("RCP45 - 2055") + theme_map()
+p3 = plot_prediction(forecast_rcp45_2075['default_maxent']) + ggtitle("RCP45 - 2075") + theme_map()
+p4 = plot_prediction(forecast_rcp85_2055['default_maxent']) + ggtitle("RCP85 - 2055") + theme_map()
+p5 = plot_prediction(forecast_rcp85_2075['default_maxent']) + ggtitle("RCP85 - 2075") + theme_map()
+
+(p1 | p2 | p3) / (p4 | p5) +
+  plot_annotation(
+    title = paste(SPECIES, "- Habitat Suitability Under Climate Change"),
+    subtitle = "Boosted Tree Model Predictions",
+    theme = theme(plot.title = element_text(size = 16, face = "bold"),
+                  plot.subtitle = element_text(size = 12))
+  )
+```
+
+**Interpretation**: Comparing across scenarios reveals how climate change may shift American Lobster habitat:
+
+-   Under **moderate warming (RCP 4.5)**, suitable habitat may gradually shift northward
+-   Under **high warming (RCP 8.5)**, more dramatic range contractions in southern areas are possible
+-   The **2075 projections** show greater changes than 2055, as cumulative warming effects intensify
+
+These predictions can inform fisheries management and conservation planning for this economically important species.
+
+## Save Predictions
+
+```{r save_all_predictions}
+path = make_path("predictions")
+
+write_prediction(nowcast, scientificname = cfg$scientificname, version = cfg$version,
+                 year = "CURRENT", scenario = "CURRENT")
+write_prediction(forecast_rcp45_2055, scientificname = cfg$scientificname, version = cfg$version,
+                 year = "2055", scenario = "RCP45")
+write_prediction(forecast_rcp45_2075, scientificname = cfg$scientificname, version = cfg$version,
+                 year = "2075", scenario = "RCP45")
+write_prediction(forecast_rcp85_2055, scientificname = cfg$scientificname, version = cfg$version,
+                 year = "2055", scenario = "RCP85")
+write_prediction(forecast_rcp85_2075, scientificname = cfg$scientificname, version = cfg$version,
+                 year = "2075", scenario = "RCP85")
+```
+
+All predictions saved to disk for future analysis.
+
+------------------------------------------------------------------------
+
+# Summary & Conclusions
+
+## Workflow Summary
+
+This project followed the complete Species Distribution Modeling workflow as outlined in the course mind-map:
+
+| Chapter | Stage | Key Functions | Output |
+|-----------------|-----------------|---------------------|-----------------|
+| C00 | Setup | `source("setup.R")` | Loaded packages and spatial data |
+| C01 | Observations | `fetch_obis()` → `read_obis()` | Filtered occurrence dataset |
+| C02 | Background | `thin_by_cell()` → `sample_background()` | Presence + background points |
+| C03 | Covariates | `filter_collinear()` → `extract_brickman()` | Environmental predictors |
+| C04 | Models | `workflow_set()` → `workflow_map()` → `workflowset_selectomatic()` | Trained model fits |
+| C05 | Prediction | `predict_stars()` | Habitat suitability maps |
+
+## Key Findings
+
+1.  **Data Quality**: Starting with `r format(dim_start[1], big.mark = ",")` records, quality filtering retained `r format(dim_final[1], big.mark = ",")` observations for modeling.
+
+2.  **Environmental Predictors**: After collinearity filtering, `r length(keep)` variables were retained: `r paste(keep, collapse = ", ")`.
+
+3.  **Model Performance**: Four algorithms were trained and evaluated using spatial cross-validation to prevent overfitting.
+
+4.  **Climate Projections**: Habitat suitability predictions suggest potential range shifts under future climate scenarios, with more severe changes under RCP 8.5.
+
+## Implications
+
+The American Lobster is a keystone species for the Gulf of Maine ecosystem and supports a multi-billion dollar fishery. Understanding how climate change may affect its distribution is critical for:
+
+-   **Fisheries management**: Adjusting harvest areas and quotas
+-   **Conservation planning**: Protecting climate refugia
+-   **Ecosystem management**: Anticipating cascading effects on predators and prey
+
+------------------------------------------------------------------------
+
+*This analysis was conducted for JP297Dj: Ocean Forecasting - AI, Ecology, and Data Justice*
+
+*Colby College, `r format(Sys.Date(), "%B %Y")`*

@@ -18,7 +18,7 @@ This document contains the complete species distribution modeling workflow for *
 For any coding project we need to load the necessary packages. We have a single file that will install (if needed) and load each package.
 
 ```{r setup, warning = FALSE, message = FALSE}
-source("setup.R")
+source("/home/pkhuat28/ColbyForecasting/setup.R")
 SPECIES = "Homarus americanus"
 
 # Custom theme for maps to prevent x-axis label collision
